@@ -20,8 +20,19 @@
     * { box-sizing: border-box; }
     html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--mono); }
     body { min-height: 100vh; }
+    button {
+      font-family: inherit; font-size: 11px; cursor: pointer;
+      background: #0b0d12; color: var(--text); border: 1px solid var(--line);
+      border-radius: 7px; padding: 5px 10px;
+    }
+    button:hover { border-color: #3a4560; }
+    button.yes { color: var(--yes); border-color: #1e5; }
+    button.warn { color: var(--amber); border-color: #a80; }
+    button.danger { color: var(--no); border-color: #a33; }
+    button.on { background: #1a2418; color: var(--yes); border-color: #2a6; }
+    button.active { background: #182033; color: var(--blue); border-color: #3a5a8a; }
     header {
-      display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center;
+      display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center;
       padding: 14px 18px; border-bottom: 1px solid var(--line);
       position: sticky; top: 0; background: rgba(7,8,11,.92); backdrop-filter: blur(8px); z-index: 2;
     }
@@ -29,18 +40,25 @@
     .logo span { color: var(--yes); }
     .pill { font-size: 11px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); }
     .pill.live { color: var(--yes); border-color: #1e5; }
-    .stats { display: flex; flex-wrap: wrap; gap: 14px 22px; margin-left: auto; font-size: 12px; }
+    .pill.warn { color: var(--amber); border-color: #a80; }
+    .stats { display: flex; flex-wrap: wrap; gap: 12px 18px; margin-left: auto; font-size: 12px; }
     .stats b { color: var(--text); font-weight: 600; }
     .up { color: var(--yes); }
     .dn { color: var(--no); }
     .flat { color: var(--dim); }
     main { padding: 14px 18px 40px; display: grid; gap: 14px; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .toolbar .hint { margin-left: auto; color: var(--dim); font-size: 10px; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
     .card {
       background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
     }
-    .card.hot { border-color: #3dff9a55; box-shadow: 0 0 0 1px #3dff9a22; }
-    .card.in { border-color: #ffcc6655; }
+    article.card { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+    article.card:hover { border-color: #334; }
+    article.card.hot { border-color: #3dff9a55; box-shadow: 0 0 0 1px #3dff9a22; }
+    article.card.in { border-color: #ffcc6655; }
+    article.card.muted { opacity: .55; }
+    article.card.sel { border-color: #6ea8ff88; box-shadow: 0 0 0 1px #6ea8ff33; }
     .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
     .asset { font-size: 18px; font-weight: 700; }
     .clock { color: var(--amber); font-size: 12px; }
@@ -58,18 +76,40 @@
     .fill { height: 100%; background: var(--blue); }
     .fill.ask { background: var(--no); }
     .fill.bid { background: var(--yes); }
+    .winbar { height: 4px; background: #0b0d12; border-radius: 99px; overflow: hidden; margin: 8px 0 0; }
+    .winbar i { display: block; height: 100%; background: var(--amber); }
     .pos { margin-top: 8px; font-size: 12px; color: var(--amber); }
+    .acts { display: flex; gap: 6px; margin-top: 8px; }
+    .spark { display: block; margin-top: 8px; width: 100%; height: 28px; }
+    .detail { display: grid; grid-template-columns: 1.1fr 1fr .9fr; gap: 12px; }
     .bottom { display: grid; grid-template-columns: 1.2fr .8fr; gap: 12px; }
-    @media (max-width: 820px) { .bottom { grid-template-columns: 1fr; } .stats { margin-left: 0; } }
+    @media (max-width: 980px) {
+      .detail { grid-template-columns: 1fr; }
+      .bottom { grid-template-columns: 1fr; }
+      .stats { margin-left: 0; }
+      .toolbar .hint { margin-left: 0; }
+    }
     table { width: 100%; border-collapse: collapse; font-size: 11px; }
     th { text-align: left; color: var(--dim); font-weight: 500; padding: 4px 6px; border-bottom: 1px solid var(--line); }
     td { padding: 5px 6px; border-bottom: 1px solid #161b27; }
+    tr.click { cursor: pointer; }
+    tr.click:hover td { background: #161b27; }
+    tr.sel td { background: #182033; }
     .log { max-height: 280px; overflow: auto; font-size: 11px; line-height: 1.45; color: var(--dim); }
     .log .trade { color: var(--text); }
     .log .warn { color: var(--amber); }
     .log .error { color: var(--no); }
+    .log div.click { cursor: pointer; }
+    .log div.click:hover { color: var(--text); }
     .rules { color: var(--dim); font-size: 11px; line-height: 1.55; }
     h2 { font-size: 12px; letter-spacing: .08em; color: var(--dim); font-weight: 600; margin: 0 0 8px; }
+    .ladder { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 11px; }
+    .lvl { display: grid; grid-template-columns: 56px 1fr 40px; gap: 6px; align-items: center; margin: 2px 0; }
+    .lvl .bar { height: 8px; background: #0b0d12; border-radius: 99px; overflow: hidden; }
+    .lvl .bar i { display: block; height: 100%; }
+    .src { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; }
+    .src span { background: #0b0d12; border: 1px solid var(--line); border-radius: 7px; padding: 4px 7px; }
+    .empty { color: var(--dim); font-size: 12px; }
   </style>
 </head>
 <body>
@@ -77,36 +117,57 @@
     <div class="logo">SCOTTY’S <span>15m CRYPTO SCALPER 3000</span></div>
     <div class="pill" id="mode">PAPER</div>
     <div class="pill" id="feed">FEED …</div>
+    <div class="pill" id="armed">ARMED</div>
+    <button id="btnPause" type="button">PAUSE</button>
     <div class="stats">
       <div>EQUITY <b id="eq">—</b></div>
       <div>CASH <b id="cash">—</b></div>
       <div>PNL <b id="pnl">—</b></div>
       <div>FEES <b id="fees">—</b></div>
       <div>OPEN <b id="open">0</b></div>
+      <div>W/L <b id="wl">0/0</b></div>
+      <div>UP <b id="up">0:00</b></div>
       <div>TICK <b id="tick">0</b></div>
     </div>
   </header>
   <main>
+    <section class="toolbar">
+      <button type="button" data-filter="all" class="active">ALL</button>
+      <button type="button" data-filter="edge">EDGE</button>
+      <button type="button" data-filter="in">IN</button>
+      <button type="button" data-filter="watch">WATCH</button>
+      <button type="button" data-filter="muted">MUTED</button>
+      <span class="sub">sort</span>
+      <button type="button" data-sort="name" class="active">NAME</button>
+      <button type="button" data-sort="edge">EDGE</button>
+      <button type="button" data-sort="clock">CLOCK</button>
+      <button type="button" data-sort="spread">SPREAD</button>
+      <div class="hint">click a card · 1–7 select · P pause · F flatten · M mute</div>
+    </section>
     <section class="grid" id="cards"></section>
+    <section class="detail" id="detail" hidden></section>
     <section class="bottom">
       <div class="card">
-        <h2>TAPE</h2>
+        <div class="row">
+          <h2>TAPE</h2>
+          <div class="toolbar" id="tapeFilters">
+            <button type="button" data-tape="all" class="active">ALL</button>
+            <button type="button" data-tape="trade">TRADES</button>
+            <button type="button" data-tape="warn">WARN</button>
+          </div>
+        </div>
         <div class="log" id="log"></div>
       </div>
       <div class="card">
         <h2>FILLS</h2>
         <div style="overflow:auto">
           <table>
-            <thead><tr><th>asset</th><th>side</th><th>in</th><th>out</th><th>pnl</th><th>why</th></tr></thead>
+            <thead><tr><th>asset</th><th>side</th><th>qty</th><th>in</th><th>out</th><th>hold</th><th>pnl</th><th>why</th></tr></thead>
             <tbody id="fills"></tbody>
           </table>
         </div>
         <h2 style="margin-top:14px">RULES</h2>
-        <div class="rules" id="rules">
-          Watch live spot vs Kalshi Yes/No. Enter only a clear, fast mismatch.
-          Size 3–5% (cap 10%). Limits. Out at +4–8¢ or when the edge dies.
-          Do not hold a dead scalp. Do not chase a missed tick.
-        </div>
+        <div class="rules" id="rules"></div>
       </div>
     </section>
   </main>
@@ -115,11 +176,49 @@
     const fmt = (n, d=2) => n == null || Number.isNaN(n) ? "—" : Number(n).toLocaleString(undefined, {minimumFractionDigits:d, maximumFractionDigits:d});
     const money = (n) => n == null ? "—" : (n < 0 ? "-" : "") + "$" + fmt(Math.abs(n), 2);
     const clsPnl = (n) => n > 0.0001 ? "up" : n < -0.0001 ? "dn" : "flat";
+    const ui = { filter: "all", sort: "name", tape: "all", selected: null, last: null };
+
     function clock(s) {
       if (s == null) return "—";
       const x = Math.max(0, s);
       const m = Math.floor(x / 60), ss = Math.floor(x % 60);
       return m + ":" + String(ss).padStart(2,"0");
+    }
+    function spark(hist, w=220, h=28) {
+      if (!hist || hist.length < 2) return "";
+      const fairs = hist.map(p => p.fair).filter(v => v != null);
+      const mids = hist.map(p => p.mid).filter(v => v != null);
+      const all = fairs.concat(mids);
+      if (all.length < 2) return "";
+      const lo = Math.min(...all), hi = Math.max(...all);
+      const span = (hi - lo) || 0.01;
+      const x = (i, n) => (n <= 1 ? 0 : i / (n - 1) * w);
+      const y = (v) => h - 2 - ((v - lo) / span) * (h - 4);
+      const path = (arr) => arr.map((v, i) => `${i ? "L" : "M"}${x(i, arr.length).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+      return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+        <path d="${path(mids)}" fill="none" stroke="#6ea8ff" stroke-width="1.2"/>
+        <path d="${path(fairs)}" fill="none" stroke="#3dff9a" stroke-width="1.2"/>
+      </svg>`;
+    }
+    function winFrac(c) {
+      const left = c.seconds_left;
+      if (left == null) return 0;
+      const total = (c.close_ts && c.open_ts && c.close_ts > c.open_ts) ? (c.close_ts - c.open_ts) : 900;
+      return Math.max(0, Math.min(1, 1 - (left / total)));
+    }
+    function showCard(c) {
+      const hot = c.signal && c.signal.kind && c.signal.kind !== "none";
+      if (ui.filter === "edge") return hot;
+      if (ui.filter === "in") return !!c.position;
+      if (ui.filter === "muted") return !!c.muted;
+      if (ui.filter === "watch") return !hot && !c.position && !c.muted;
+      return true;
+    }
+    function sortCards(a, b) {
+      if (ui.sort === "edge") return (b.signal?.edge || 0) - (a.signal?.edge || 0);
+      if (ui.sort === "clock") return (a.seconds_left ?? 9e9) - (b.seconds_left ?? 9e9);
+      if (ui.sort === "spread") return (a.spread ?? 9) - (b.spread ?? 9);
+      return a.asset.localeCompare(b.asset);
     }
     function card(c) {
       const hot = c.signal && c.signal.kind && c.signal.kind !== "none";
@@ -137,56 +236,219 @@
       const sigTxt = hot
         ? `${c.signal.kind} ${c.signal.side}  edge ${fmt(c.signal.edge,3)}  ${c.signal.reason}`
         : (c.skip || "watching");
-      return `<article class="card${hot ? " hot" : ""}${inPos ? " in" : ""}">
-        <div class="row"><div class="asset">${c.asset}</div><div class="clock">${clock(c.seconds_left)}</div></div>
+      const cls = ["card", hot ? "hot" : "", inPos ? "in" : "", c.muted ? "muted" : "", ui.selected === c.asset ? "sel" : ""]
+        .filter(Boolean).join(" ");
+      return `<article class="${cls}" data-asset="${c.asset}">
+        <div class="row"><div class="asset">${c.asset}${c.muted ? " · MUTED" : ""}</div><div class="clock">${clock(c.seconds_left)}</div></div>
+        <div class="winbar" title="window elapsed"><i style="width:${(winFrac(c)*100).toFixed(1)}%"></i></div>
         <div class="spot">${fmt(c.spot, c.spot >= 100 ? 2 : 6)}</div>
         <div class="sub">strike ${fmt(c.strike, c.strike >= 100 ? 2 : 6)}
           <span class="${vsCls}">${vs == null ? "" : (vs>=0?"+":"") + fmt(vs,1) + " bps"}</span>
-          · ${c.ticker || ""}</div>
+          · ${c.ticker || ""}
+          ${c.spread != null ? " · spr " + fmt(c.spread, 2) : ""}
+        </div>
         <div class="quotes">
           <div class="q"><div class="k">YES BID / ASK</div><div class="v">${fmt(c.yes_bid,2)} <span class="sub">/</span> ${fmt(c.yes_ask,2)}</div></div>
           <div class="q"><div class="k">FAIR YES</div><div class="v">${fmt(c.fair,2)}</div></div>
           <div class="q"><div class="k">EDGE vs MID</div><div class="v ${clsPnl(edge)}">${edge>=0?"+":""}${fmt(edge,3)}</div></div>
         </div>
+        ${spark(c.history)}
         <div class="bars">
           <div><div class="barline"><span>BID DEPTH</span><span>${fmt(c.yes_bid_size,0)}</span></div><div class="track"><div class="fill bid" style="width:${depthBid}%"></div></div></div>
           <div><div class="barline"><span>ASK DEPTH</span><span>${fmt(c.yes_ask_size,0)}</span></div><div class="track"><div class="fill ask" style="width:${depthAsk}%"></div></div></div>
         </div>
         <div class="${sigCls}">${sigTxt}</div>
         ${pos}
+        <div class="acts">
+          <button type="button" data-act="mute" data-asset="${c.asset}">${c.muted ? "UNMUTE" : "MUTE"}</button>
+          ${inPos ? `<button type="button" class="danger" data-act="flatten" data-asset="${c.asset}">FLATTEN</button>` : ""}
+        </div>
       </article>`;
+    }
+    function levels(rows, kind) {
+      const max = Math.max(1, ...rows.map(r => r.sz || 0));
+      const color = kind === "bid" ? "var(--yes)" : "var(--no)";
+      return rows.map(r => `
+        <div class="lvl">
+          <span>${fmt(r.px,2)}</span>
+          <div class="bar"><i style="width:${((r.sz||0)/max*100).toFixed(0)}%;background:${color}"></i></div>
+          <span>${fmt(r.sz,0)}</span>
+        </div>`).join("") || `<div class="empty">no book</div>`;
+    }
+    function detailHTML(c) {
+      const src = Object.entries(c.sources || {});
+      const lock = c.locked_avg != null
+        ? `locked ${fmt(c.locked_secs,0)}s @ ${fmt(c.locked_avg, c.locked_avg >= 100 ? 2 : 6)}`
+        : "not in settlement minute";
+      return `
+        <div class="card">
+          <h2>${c.asset} BOOK</h2>
+          <div class="ladder">
+            <div><div class="sub">YES BIDS</div>${levels(c.depth_bid || [], "bid")}</div>
+            <div><div class="sub">YES ASKS</div>${levels(c.depth_ask || [], "ask")}</div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>WHY THIS TICK</h2>
+          <div class="sig ${c.signal && c.signal.kind !== "none" ? "edge" : ""}">${c.signal?.kind || "none"} ${c.signal?.side || ""} · ${c.signal?.reason || c.skip || "watching"}</div>
+          ${spark(c.history, 420, 56)}
+          <div class="sub" style="margin-top:8px">green = fair · blue = kalshi mid</div>
+          <div class="sub" style="margin-top:8px">vol ${fmt(c.sigma_1m_bps,1)} bps/min · last ${fmt(c.last,2)} · vol ${fmt(c.volume,0)} · oi ${fmt(c.oi,0)}</div>
+          <div class="sub">settlement ${lock}</div>
+          ${c.error ? `<div class="sig" style="color:var(--no)">${c.error}</div>` : ""}
+        </div>
+        <div class="card">
+          <h2>SPOT VENUES</h2>
+          <div class="src">${src.length ? src.map(([k,v]) => `<span>${k} ${fmt(v, v>=100?2:6)}</span>`).join("") : `<span>waiting</span>`}</div>
+          <div class="sub" style="margin-top:10px">spot ${fmt(c.spot, c.spot>=100?2:6)} vs strike ${fmt(c.strike, c.strike>=100?2:6)}
+            ${c.spot_chg == null ? "" : " · " + (c.spot_chg>=0?"+":"") + fmt(c.spot_chg, c.spot>=100?2:4) + " / 8s"}</div>
+          <div class="acts" style="margin-top:12px">
+            <button type="button" data-act="mute" data-asset="${c.asset}">${c.muted ? "UNMUTE" : "MUTE"}</button>
+            ${c.position ? `<button type="button" class="danger" data-act="flatten" data-asset="${c.asset}">FLATTEN</button>` : ""}
+            <button type="button" data-act="clear">CLOSE</button>
+          </div>
+        </div>`;
+    }
+    async function act(op, asset) {
+      const r = await fetch("/api/action", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({op, asset}),
+      });
+      const j = await r.json();
+      if (!j.ok) $("feed").textContent = j.error || "ACTION FAILED";
+      await tick();
+    }
+    function bind(root) {
+      root.querySelectorAll("[data-asset]").forEach(el => {
+        if (el.tagName === "BUTTON") return;
+        el.addEventListener("click", () => {
+          ui.selected = ui.selected === el.dataset.asset ? null : el.dataset.asset;
+          render(ui.last);
+        });
+      });
+      root.querySelectorAll("[data-act]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const a = btn.dataset.act;
+          if (a === "clear") { ui.selected = null; render(ui.last); return; }
+          if (a === "mute") {
+            const card = (ui.last.cards || []).find(c => c.asset === btn.dataset.asset);
+            act(card && card.muted ? "unmute" : "mute", btn.dataset.asset);
+            return;
+          }
+          act(a, btn.dataset.asset);
+        });
+      });
+    }
+    function render(s) {
+      ui.last = s;
+      $("mode").textContent = s.mode;
+      $("mode").className = "pill live";
+      $("feed").textContent = s.ws_ok ? "SPOT WS LIVE" : "SPOT REST";
+      $("armed").textContent = s.paused ? "PAUSED" : "ARMED";
+      $("armed").className = "pill " + (s.paused ? "warn" : "live");
+      $("btnPause").textContent = s.paused ? "RESUME" : "PAUSE";
+      $("btnPause").className = s.paused ? "yes" : "warn";
+      $("eq").textContent = money(s.equity);
+      $("cash").textContent = money(s.cash);
+      $("pnl").textContent = money(s.realized);
+      $("pnl").className = clsPnl(s.realized);
+      $("fees").textContent = money(s.fees_paid);
+      $("open").textContent = s.open;
+      $("tick").textContent = s.tick;
+      $("up").textContent = clock(s.uptime_s);
+      const st = s.stats || {};
+      $("wl").textContent = `${st.wins || 0}/${st.losses || 0}`;
+      $("wl").className = (st.wins || 0) === (st.losses || 0) ? "flat" : (st.wins > st.losses ? "up" : "dn");
+      const cards = (s.cards || []).filter(showCard).sort(sortCards);
+      $("cards").innerHTML = cards.map(card).join("") || `<div class="empty">no markets match this filter</div>`;
+      const sel = (s.cards || []).find(c => c.asset === ui.selected);
+      const d = $("detail");
+      if (sel) { d.hidden = false; d.innerHTML = detailHTML(sel); }
+      else { d.hidden = true; d.innerHTML = ""; }
+      const tape = (s.log || []).filter(l => ui.tape === "all" || l.level === ui.tape).slice(0, 40);
+      $("log").innerHTML = tape.map(l => {
+        const t = new Date(l.ts * 1000).toISOString().slice(11,19);
+        const asset = l.asset || "";
+        return `<div class="${l.level||""}${asset ? " click" : ""}" data-pick="${asset}">${t}  ${l.msg}</div>`;
+      }).join("");
+      $("fills").innerHTML = (s.trades || []).slice(0, 20).map(t =>
+        `<tr class="click${ui.selected===t.asset?" sel":""}" data-pick="${t.asset}">
+          <td>${t.asset}</td><td>${t.side}</td><td>${fmt(t.qty,0)}</td>
+          <td>${fmt(t.entry,2)}</td><td>${fmt(t.exit,2)}</td>
+          <td>${fmt(t.hold_s,0)}s</td>
+          <td class="${clsPnl(t.pnl)}">${money(t.pnl)}</td>
+          <td>${t.reason_out || ""}</td>
+        </tr>`
+      ).join("") || `<tr><td colspan="8" class="flat">no fills yet — waiting for a clear fast edge</td></tr>`;
+      const r = s.rules || {};
+      $("rules").innerHTML = [
+        `Watch live spot vs Kalshi Yes/No. Enter only a clear, fast mismatch.`,
+        `Size ${r.size || "3–5% (cap 10%)"}. ${r.orders || "Limits only"}.`,
+        `Out at ${r.target || "+4–8¢"} or ${r.dead || "when the edge dies"}.`,
+        `${r.chase || "Do not chase a missed tick"}. Session ${st.n || 0} fills · win ${fmt(st.win_pct,0)}% · avg ${money(st.avg_pnl)} · hold ${fmt(st.avg_hold_s,0)}s.`,
+      ].join(" ");
+      bind($("cards"));
+      bind($("detail"));
+      document.querySelectorAll("[data-pick]").forEach(el => {
+        el.addEventListener("click", () => {
+          if (!el.dataset.pick) return;
+          ui.selected = el.dataset.pick;
+          render(ui.last);
+        });
+      });
     }
     async function tick() {
       try {
         const r = await fetch("/api/state", {cache:"no-store"});
-        const s = await r.json();
-        $("mode").textContent = s.mode;
-        $("mode").className = "pill live";
-        $("feed").textContent = s.ws_ok ? "SPOT WS LIVE" : "SPOT REST";
-        $("eq").textContent = money(s.equity);
-        $("cash").textContent = money(s.cash);
-        $("pnl").textContent = money(s.realized);
-        $("pnl").className = clsPnl(s.realized);
-        $("fees").textContent = money(s.fees_paid);
-        $("open").textContent = s.open;
-        $("tick").textContent = s.tick;
-        $("cards").innerHTML = (s.cards || []).map(card).join("");
-        $("log").innerHTML = (s.log || []).slice(0, 40).map(l => {
-          const t = new Date(l.ts * 1000).toISOString().slice(11,19);
-          return `<div class="${l.level||""}">${t}  ${l.msg}</div>`;
-        }).join("");
-        $("fills").innerHTML = (s.trades || []).slice(0, 20).map(t =>
-          `<tr>
-            <td>${t.asset}</td><td>${t.side}</td>
-            <td>${fmt(t.entry,2)}</td><td>${fmt(t.exit,2)}</td>
-            <td class="${clsPnl(t.pnl)}">${money(t.pnl)}</td>
-            <td>${t.reason_out || ""}</td>
-          </tr>`
-        ).join("") || `<tr><td colspan="6" class="flat">no fills yet — waiting for a clear fast edge</td></tr>`;
+        render(await r.json());
       } catch (e) {
         $("feed").textContent = "DASHBOARD OFFLINE";
       }
     }
+    $("btnPause").addEventListener("click", () => {
+      const paused = !!(ui.last && ui.last.paused);
+      act(paused ? "resume" : "pause");
+    });
+    document.querySelectorAll("[data-filter]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        ui.filter = btn.dataset.filter;
+        document.querySelectorAll("[data-filter]").forEach(b => b.classList.toggle("active", b === btn));
+        if (ui.last) render(ui.last);
+      });
+    });
+    document.querySelectorAll("[data-sort]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        ui.sort = btn.dataset.sort;
+        document.querySelectorAll("[data-sort]").forEach(b => b.classList.toggle("active", b === btn));
+        if (ui.last) render(ui.last);
+      });
+    });
+    document.querySelectorAll("[data-tape]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        ui.tape = btn.dataset.tape;
+        document.querySelectorAll("[data-tape]").forEach(b => b.classList.toggle("active", b === btn));
+        if (ui.last) render(ui.last);
+      });
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.target && ["INPUT", "TEXTAREA"].includes(e.target.tagName)) return;
+      const cards = (ui.last && ui.last.cards) || [];
+      if (e.key >= "1" && e.key <= "7") {
+        const c = cards[Number(e.key) - 1];
+        if (c) { ui.selected = c.asset; render(ui.last); }
+      } else if (e.key === "Escape") {
+        ui.selected = null; if (ui.last) render(ui.last);
+      } else if (e.key === "p" || e.key === "P") {
+        act(ui.last && ui.last.paused ? "resume" : "pause");
+      } else if ((e.key === "m" || e.key === "M") && ui.selected) {
+        const c = cards.find(x => x.asset === ui.selected);
+        act(c && c.muted ? "unmute" : "mute", ui.selected);
+      } else if ((e.key === "f" || e.key === "F") && ui.selected) {
+        act("flatten", ui.selected);
+      }
+    });
     tick();
     setInterval(tick, 600);
   </script>

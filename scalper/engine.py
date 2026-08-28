@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import traceback
 import time
 from collections import deque
@@ -50,6 +51,9 @@ class Engine:
         self.last_vol_refresh = 0.0
         self.last_rest_spot = 0.0
         self.running = False
+        self.paused = False
+        self.muted: set[str] = set()
+        self._lock = threading.Lock()
         self.mode = "PAPER"
         if cfg.live:
             self.note("LIVE requested but no Kalshi keys in this environment — staying PAPER", "warn")
@@ -95,24 +99,24 @@ class Engine:
                 pass
             self.last_rest_spot = now
 
-        self.risk.open_count = len(self.broker.positions)
-
         snaps = {}
         try:
             snaps = self.kalshi.snapshot_all(ASSETS)
         except Exception as e:
             self.note(f"kalshi batch: {e}", "error")
 
-        for asset, meta in ASSETS.items():
-            st = self.assets[asset]
-            if asset in snaps and snaps[asset]:
-                st.market = snaps[asset]
-            try:
-                self._step_asset(st, meta, now)
-            except Exception as e:
-                st.last_error = str(e)
-                if self.tick_n % 20 == 0:
-                    self.note(f"{asset} error: {e}", "error")
+        with self._lock:
+            self.risk.open_count = len(self.broker.positions)
+            for asset, meta in ASSETS.items():
+                st = self.assets[asset]
+                if asset in snaps and snaps[asset]:
+                    st.market = snaps[asset]
+                try:
+                    self._step_asset(st, meta, now)
+                except Exception as e:
+                    st.last_error = str(e)
+                    if self.tick_n % 20 == 0:
+                        self.note(f"{asset} error: {e}", "error")
 
     def _step_asset(self, st: AssetState, meta: dict, now: float) -> None:
         spot_obj = self.spots.get(st.asset)
@@ -205,6 +209,13 @@ class Engine:
             st.skip = ""
             return
 
+        if self.paused:
+            st.skip = "paused — watching only"
+            return
+        if st.asset in self.muted:
+            st.skip = "muted from dashboard"
+            return
+
         if sig.kind == "none":
             st.skip = sig.reason or "no edge"
             return
@@ -282,6 +293,49 @@ class Engine:
                 asset=st.asset,
             )
 
+    def flatten_now(self, asset: str, reason: str = "flatten from dashboard") -> dict:
+        st = self.assets.get(asset)
+        if not st:
+            return {"ok": False, "error": "unknown asset"}
+        if asset not in self.broker.positions:
+            return {"ok": False, "error": "no position"}
+        if not st.market:
+            return {"ok": False, "error": "no market quote"}
+        before = asset in self.broker.positions
+        self._flatten(st, reason, st.market, taker=True)
+        still = asset in self.broker.positions
+        if before and still:
+            return {"ok": False, "error": st.skip or "could not flatten"}
+        return {"ok": True, "asset": asset}
+
+    def action(self, payload: dict) -> dict:
+        op = str(payload.get("op") or "").strip().lower()
+        asset = str(payload.get("asset") or "").strip().upper()
+        with self._lock:
+            if op == "pause":
+                self.paused = True
+                self.note("paused from dashboard — watching, no new entries", "warn")
+                return {"ok": True, "paused": True}
+            if op == "resume":
+                self.paused = False
+                self.note("resumed from dashboard")
+                return {"ok": True, "paused": False}
+            if op == "mute":
+                if asset not in self.assets:
+                    return {"ok": False, "error": "unknown asset"}
+                self.muted.add(asset)
+                self.note(f"muted {asset} — no new entries", "warn")
+                return {"ok": True, "muted": sorted(self.muted)}
+            if op == "unmute":
+                self.muted.discard(asset)
+                self.note(f"unmuted {asset}")
+                return {"ok": True, "muted": sorted(self.muted)}
+            if op == "flatten":
+                if asset not in self.assets:
+                    return {"ok": False, "error": "unknown asset"}
+                return self.flatten_now(asset)
+            return {"ok": False, "error": f"unknown op {op!r}"}
+
     def _equity(self) -> float:
         eq = self.broker.cash
         for asset, pos in self.broker.positions.items():
@@ -296,91 +350,136 @@ class Engine:
             eq += mark * pos.qty
         return eq
 
+    def _history(self, st: AssetState, n: int = 48) -> list[dict]:
+        ticks = list(st.hist.ticks)
+        if not ticks:
+            return []
+        if len(ticks) > n:
+            step = len(ticks) / n
+            ticks = [ticks[min(len(ticks) - 1, int(i * step))] for i in range(n)]
+        out = []
+        for t in ticks:
+            mid = 0.5 * (t.yes_bid + t.yes_ask) if t.yes_bid and t.yes_ask else None
+            out.append({"t": t.ts, "fair": t.fair, "mid": mid, "spot": t.spot})
+        return out
+
+    def _session_stats(self) -> dict:
+        trades = list(self.broker.trades)
+        n = len(trades)
+        wins = sum(1 for t in trades if t.get("pnl", 0) > 0)
+        losses = sum(1 for t in trades if t.get("pnl", 0) < 0)
+        pnls = [float(t.get("pnl") or 0) for t in trades]
+        holds = [float(t.get("hold_s") or 0) for t in trades]
+        return {
+            "n": n,
+            "wins": wins,
+            "losses": losses,
+            "scratches": max(0, n - wins - losses),
+            "win_pct": (wins / n * 100.0) if n else 0.0,
+            "avg_pnl": (sum(pnls) / n) if n else 0.0,
+            "avg_hold_s": (sum(holds) / n) if n else 0.0,
+            "best": max(pnls) if pnls else 0.0,
+            "worst": min(pnls) if pnls else 0.0,
+        }
+
     def state(self) -> dict:
         now = time.time()
-        cards = []
-        for asset, st in self.assets.items():
-            m = st.market
-            sig = st.signal
-            pos = self.broker.positions.get(asset)
-            cards.append(
-                {
-                    "asset": asset,
-                    "spot": st.spot,
-                    "sources": st.sources,
-                    "strike": m.strike if m else None,
-                    "spot_vs_strike": (st.spot - m.strike) if m else None,
-                    "spot_vs_strike_bps": ((st.spot - m.strike) / m.strike * 10000) if m and m.strike else None,
-                    "ticker": m.ticker if m else None,
-                    "yes_bid": m.yes_bid if m else None,
-                    "yes_ask": m.yes_ask if m else None,
-                    "yes_bid_size": m.yes_bid_size if m else None,
-                    "yes_ask_size": m.yes_ask_size if m else None,
-                    "spread": (m.yes_ask - m.yes_bid) if m else None,
-                    "last": m.last if m else None,
-                    "volume": m.volume if m else None,
-                    "oi": m.open_interest if m else None,
-                    "fair": st.fair,
-                    "mid": (0.5 * (m.yes_bid + m.yes_ask)) if m else None,
-                    "seconds_left": st.seconds_left,
-                    "sigma_1m_bps": (st.vol.sigma_log_1m * 10000) if st.vol else None,
-                    "signal": {
-                        "kind": sig.kind if sig else "none",
-                        "side": sig.side if sig else "",
-                        "edge": sig.edge_cents if sig else 0,
-                        "reason": sig.reason if sig else st.skip,
-                        "take": sig.take_price if sig else None,
-                    },
-                    "skip": st.skip,
-                    "error": st.last_error,
-                    "depth_bid": [
-                        {"px": lvl.price, "sz": lvl.size} for lvl in (m.book.yes_bids[:6] if m else [])
-                    ],
-                    "depth_ask": [
-                        {"px": round(1.0 - lvl.price, 4), "sz": lvl.size}
-                        for lvl in (m.book.no_bids[:6] if m else [])
-                    ],
-                    "position": None
-                    if not pos
-                    else {
-                        "side": pos.side,
-                        "qty": pos.qty,
-                        "entry": pos.entry,
-                        "held_s": now - pos.entry_ts,
-                        "target": pos.target,
-                        "mtm": (
-                            ((m.yes_bid if pos.side == "yes" else round(1.0 - m.yes_ask, 4)) - pos.entry)
-                            if m
-                            else 0
-                        ),
-                    },
-                }
-            )
-        return {
-            "ok": True,
-            "mode": self.mode,
-            "now": now,
-            "uptime_s": now - self.started,
-            "tick": self.tick_n,
-            "ws_ok": self.spots.ws_ok(),
-            "bankroll": self.cfg.bankroll,
-            "cash": self.broker.cash,
-            "equity": self._equity(),
-            "realized": self.broker.realized,
-            "fees_paid": self.broker.fees_paid,
-            "open": len(self.broker.positions),
-            "cards": cards,
-            "trades": list(reversed(self.broker.trades[-40:])),
-            "log": list(self.log)[:80],
-            "rules": {
-                "size": "3–5% of bankroll (hard cap 10%)",
-                "edge": "≥4¢ and ≥5% net after fees",
-                "target": "+4–8¢ then out",
-                "dead": "out in ~35s if it does not move",
-                "orders": "limits only; never market both sides",
-                "chase": "no revenge / no chase after a missed tick",
-            },
-        }
+        with self._lock:
+            cards = []
+            for asset, st in self.assets.items():
+                m = st.market
+                sig = st.signal
+                pos = self.broker.positions.get(asset)
+                d_spot = st.hist.spot_change(now, self.cfg.lag_lookback_s)
+                cards.append(
+                    {
+                        "asset": asset,
+                        "spot": st.spot,
+                        "sources": st.sources,
+                        "strike": m.strike if m else None,
+                        "spot_vs_strike": (st.spot - m.strike) if m else None,
+                        "spot_vs_strike_bps": ((st.spot - m.strike) / m.strike * 10000) if m and m.strike else None,
+                        "spot_chg": d_spot,
+                        "ticker": m.ticker if m else None,
+                        "yes_bid": m.yes_bid if m else None,
+                        "yes_ask": m.yes_ask if m else None,
+                        "yes_bid_size": m.yes_bid_size if m else None,
+                        "yes_ask_size": m.yes_ask_size if m else None,
+                        "spread": (m.yes_ask - m.yes_bid) if m else None,
+                        "last": m.last if m else None,
+                        "volume": m.volume if m else None,
+                        "oi": m.open_interest if m else None,
+                        "fair": st.fair,
+                        "mid": (0.5 * (m.yes_bid + m.yes_ask)) if m else None,
+                        "seconds_left": st.seconds_left,
+                        "close_ts": m.close_ts if m else None,
+                        "open_ts": m.open_ts if m else None,
+                        "sigma_1m_bps": (st.vol.sigma_log_1m * 10000) if st.vol else None,
+                        "locked_avg": st.locked_avg,
+                        "locked_secs": st.locked_secs,
+                        "muted": asset in self.muted,
+                        "signal": {
+                            "kind": sig.kind if sig else "none",
+                            "side": sig.side if sig else "",
+                            "edge": sig.edge_cents if sig else 0,
+                            "reason": sig.reason if sig else st.skip,
+                            "take": sig.take_price if sig else None,
+                        },
+                        "skip": st.skip,
+                        "error": st.last_error,
+                        "history": self._history(st),
+                        "depth_bid": [
+                            {"px": lvl.price, "sz": lvl.size} for lvl in (m.book.yes_bids[:8] if m else [])
+                        ],
+                        "depth_ask": [
+                            {"px": round(1.0 - lvl.price, 4), "sz": lvl.size}
+                            for lvl in (m.book.no_bids[:8] if m else [])
+                        ],
+                        "position": None
+                        if not pos
+                        else {
+                            "side": pos.side,
+                            "qty": pos.qty,
+                            "entry": pos.entry,
+                            "held_s": now - pos.entry_ts,
+                            "target": pos.target,
+                            "reason_in": pos.reason_in,
+                            "mtm": (
+                                ((m.yes_bid if pos.side == "yes" else round(1.0 - m.yes_ask, 4)) - pos.entry)
+                                if m
+                                else 0
+                            ),
+                        },
+                    }
+                )
+            return {
+                "ok": True,
+                "mode": self.mode,
+                "paused": self.paused,
+                "muted": sorted(self.muted),
+                "now": now,
+                "uptime_s": now - self.started,
+                "tick": self.tick_n,
+                "ws_ok": self.spots.ws_ok(),
+                "bankroll": self.cfg.bankroll,
+                "cash": self.broker.cash,
+                "equity": self._equity(),
+                "realized": self.broker.realized,
+                "fees_paid": self.broker.fees_paid,
+                "open": len(self.broker.positions),
+                "cards": cards,
+                "stats": self._session_stats(),
+                "trades": list(reversed(self.broker.trades[-40:])),
+                "log": list(self.log)[:80],
+                "rules": {
+                    "size": "3–5% of bankroll (hard cap 10%)",
+                    "edge": "≥4¢ and ≥5% net after fees",
+                    "target": "+4–8¢ then out",
+                    "dead": "out in ~35s if it does not move",
+                    "orders": "limits only; never market both sides",
+                    "chase": "no revenge / no chase after a missed tick",
+                },
+            }
 
     def loop(self) -> None:
         self.start()

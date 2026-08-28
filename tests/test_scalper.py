@@ -234,6 +234,132 @@ def test_window_ticker_matches_kalshi_pattern():
     assert current_window_ticker("KXETH15M", ts) == "KXETH15M-26AUG290000-00"
 
 
+def _paper_market(asset="BTC", yes_bid=0.40, yes_ask=0.42):
+    from scalper.book import Book, BookLevel
+    from scalper.feeds import MarketSnap
+
+    now = time.time()
+    book = Book(
+        yes_bids=[BookLevel(yes_bid, 120), BookLevel(yes_bid - 0.01, 80)],
+        no_bids=[BookLevel(round(1.0 - yes_ask, 4), 110)],
+    )
+    return MarketSnap(
+        asset=asset,
+        ticker=f"KX{asset}15M-TEST",
+        event_ticker="x",
+        title="t",
+        status="active",
+        strike=100.0,
+        close_ts=now + 400,
+        open_ts=now - 80,
+        yes_bid=yes_bid,
+        yes_ask=yes_ask,
+        yes_bid_size=120,
+        yes_ask_size=110,
+        last=0.41,
+        volume=2500,
+        open_interest=900,
+        book=book,
+        rules="",
+        ts=now,
+    )
+
+
+def test_dashboard_pause_mute_and_flatten():
+    from scalper.broker import Position
+    from scalper.engine import Engine
+    from scalper.feeds import Spot
+    from scalper.model import Tick
+
+    cfg = ScalperConfig()
+    eng = Engine(cfg)
+    assert eng.action({"op": "bogus"})["ok"] is False
+    assert eng.action({"op": "pause"}) == {"ok": True, "paused": True}
+    assert eng.paused is True
+    assert eng.action({"op": "resume"}) == {"ok": True, "paused": False}
+    assert eng.action({"op": "mute", "asset": "btc"})["ok"] is True
+    assert "BTC" in eng.muted
+    assert eng.action({"op": "unmute", "asset": "BTC"})["ok"] is True
+    assert "BTC" not in eng.muted
+
+    now = time.time()
+    st = eng.assets["BTC"]
+    st.market = _paper_market()
+    st.spot = 100.2
+    st.hist.push(Tick(ts=now - 2, spot=100.2, yes_bid=0.40, yes_ask=0.42, fair=0.45))
+    eng.spots._spots["BTC"] = Spot(
+        asset="BTC", price=100.2, bid=100.1, ask=100.3, source="t", ts=now, sources={"coinbase": 100.2}
+    )
+    eng.paused = True
+    eng._step_asset(st, {"min_depth": 80.0}, now)
+    assert "paused" in st.skip
+
+    eng.paused = False
+    eng.muted.add("BTC")
+    eng._step_asset(st, {"min_depth": 80.0}, now)
+    assert "muted" in st.skip
+    eng.muted.clear()
+
+    pos = Position(
+        asset="BTC", ticker=st.market.ticker, side="yes", qty=5, entry=0.40,
+        entry_ts=now - 8, fees=0.05, target=0.06, reason_in="test", kind="lag_yes",
+    )
+    eng.broker.positions["BTC"] = pos
+    out = eng.flatten_now("BTC")
+    assert out["ok"] is True
+    assert "BTC" not in eng.broker.positions
+    assert eng.broker.trades[-1]["reason_out"] == "flatten from dashboard"
+
+    snap = eng.state()
+    assert snap["paused"] is False
+    assert "stats" in snap
+    btc = next(c for c in snap["cards"] if c["asset"] == "BTC")
+    assert "history" in btc
+    assert "depth_bid" in btc
+    assert btc["muted"] is False
+
+
+def test_action_http_roundtrip():
+    import json
+    import urllib.error
+    import urllib.request
+    from scalper.engine import Engine
+    from scalper.server import serve
+
+    eng = Engine(ScalperConfig())
+    httpd = serve(eng, "127.0.0.1", 0)
+    port = httpd.server_address[1]
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/action",
+            data=json.dumps({"op": "pause"}).encode(),
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            body = json.loads(resp.read().decode())
+        assert body == {"ok": True, "paused": True}
+        assert eng.paused is True
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/state", timeout=3) as resp:
+            state = json.loads(resp.read().decode())
+        assert state["paused"] is True
+        assert "stats" in state
+        bad = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/action",
+            data=b"not-json",
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            urllib.request.urlopen(bad, timeout=3)
+            raise AssertionError("expected 400")
+        except urllib.error.HTTPError as e:
+            assert e.code == 400
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
 def test_net_edge_after_taker_fees_positive_only_if_gap_clears_cost():
     # 1¢ theoretical edge should not clear round-trip taker fees near 50¢.
     net = net_edge_after_costs(0.51, 0.50, "yes", 1.0, is_taker=True, assumed_exit_move=0.06)

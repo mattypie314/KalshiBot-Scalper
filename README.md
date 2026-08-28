@@ -32,6 +32,8 @@ python3 run.py
 
 Dashboard: `http://127.0.0.1:8787`
 
+The dashboard is live and interactive: click a card for the book / venues / sparkline, filter and sort the board, pause new entries, mute an asset, or flatten a paper position. Keyboard: `1–7` select, `P` pause, `M` mute, `F` flatten.
+
 This environment has **no Kalshi API keys**, so the engine stays in **PAPER**. It will not place live orders.
 
 ```bash
