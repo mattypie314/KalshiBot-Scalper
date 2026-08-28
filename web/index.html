@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Scalper 3000 — 15m Crypto</title>
+  <style>
+    :root {
+      --bg: #07080b;
+      --panel: #101218;
+      --line: #1c2130;
+      --text: #e8edf7;
+      --dim: #8b95a8;
+      --yes: #3dff9a;
+      --no: #ff5d6c;
+      --amber: #ffcc66;
+      --blue: #6ea8ff;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--mono); }
+    body { min-height: 100vh; }
+    header {
+      display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center;
+      padding: 14px 18px; border-bottom: 1px solid var(--line);
+      position: sticky; top: 0; background: rgba(7,8,11,.92); backdrop-filter: blur(8px); z-index: 2;
+    }
+    .logo { font-weight: 700; letter-spacing: .08em; font-size: 14px; }
+    .logo span { color: var(--yes); }
+    .pill { font-size: 11px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); }
+    .pill.live { color: var(--yes); border-color: #1e5; }
+    .stats { display: flex; flex-wrap: wrap; gap: 14px 22px; margin-left: auto; font-size: 12px; }
+    .stats b { color: var(--text); font-weight: 600; }
+    .up { color: var(--yes); }
+    .dn { color: var(--no); }
+    .flat { color: var(--dim); }
+    main { padding: 14px 18px 40px; display: grid; gap: 14px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+    .card {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+    }
+    .card.hot { border-color: #3dff9a55; box-shadow: 0 0 0 1px #3dff9a22; }
+    .card.in { border-color: #ffcc6655; }
+    .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .asset { font-size: 18px; font-weight: 700; }
+    .clock { color: var(--amber); font-size: 12px; }
+    .spot { font-size: 20px; margin: 6px 0 2px; }
+    .sub { color: var(--dim); font-size: 11px; }
+    .quotes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 10px 0; }
+    .q { background: #0b0d12; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+    .q .k { color: var(--dim); font-size: 10px; letter-spacing: .06em; }
+    .q .v { font-size: 16px; margin-top: 2px; }
+    .sig { font-size: 11px; color: var(--dim); min-height: 2.6em; margin-top: 6px; }
+    .sig.edge { color: var(--yes); }
+    .bars { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .barline { display: flex; justify-content: space-between; font-size: 10px; color: var(--dim); }
+    .track { height: 6px; background: #0b0d12; border-radius: 99px; overflow: hidden; margin-top: 3px; }
+    .fill { height: 100%; background: var(--blue); }
+    .fill.ask { background: var(--no); }
+    .fill.bid { background: var(--yes); }
+    .pos { margin-top: 8px; font-size: 12px; color: var(--amber); }
+    .bottom { display: grid; grid-template-columns: 1.2fr .8fr; gap: 12px; }
+    @media (max-width: 820px) { .bottom { grid-template-columns: 1fr; } .stats { margin-left: 0; } }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    th { text-align: left; color: var(--dim); font-weight: 500; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+    td { padding: 5px 6px; border-bottom: 1px solid #161b27; }
+    .log { max-height: 280px; overflow: auto; font-size: 11px; line-height: 1.45; color: var(--dim); }
+    .log .trade { color: var(--text); }
+    .log .warn { color: var(--amber); }
+    .log .error { color: var(--no); }
+    .rules { color: var(--dim); font-size: 11px; line-height: 1.55; }
+    h2 { font-size: 12px; letter-spacing: .08em; color: var(--dim); font-weight: 600; margin: 0 0 8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">SCOTTY’S <span>15m CRYPTO SCALPER 3000</span></div>
+    <div class="pill" id="mode">PAPER</div>
+    <div class="pill" id="feed">FEED …</div>
+    <div class="stats">
+      <div>EQUITY <b id="eq">—</b></div>
+      <div>CASH <b id="cash">—</b></div>
+      <div>PNL <b id="pnl">—</b></div>
+      <div>FEES <b id="fees">—</b></div>
+      <div>OPEN <b id="open">0</b></div>
+      <div>TICK <b id="tick">0</b></div>
+    </div>
+  </header>
+  <main>
+    <section class="grid" id="cards"></section>
+    <section class="bottom">
+      <div class="card">
+        <h2>TAPE</h2>
+        <div class="log" id="log"></div>
+      </div>
+      <div class="card">
+        <h2>FILLS</h2>
+        <div style="overflow:auto">
+          <table>
+            <thead><tr><th>asset</th><th>side</th><th>in</th><th>out</th><th>pnl</th><th>why</th></tr></thead>
+            <tbody id="fills"></tbody>
+          </table>
+        </div>
+        <h2 style="margin-top:14px">RULES</h2>
+        <div class="rules" id="rules">
+          Watch live spot vs Kalshi Yes/No. Enter only a clear, fast mismatch.
+          Size 3–5% (cap 10%). Limits. Out at +4–8¢ or when the edge dies.
+          Do not hold a dead scalp. Do not chase a missed tick.
+        </div>
+      </div>
+    </section>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const fmt = (n, d=2) => n == null || Number.isNaN(n) ? "—" : Number(n).toLocaleString(undefined, {minimumFractionDigits:d, maximumFractionDigits:d});
+    const money = (n) => n == null ? "—" : (n < 0 ? "-" : "") + "$" + fmt(Math.abs(n), 2);
+    const clsPnl = (n) => n > 0.0001 ? "up" : n < -0.0001 ? "dn" : "flat";
+    function clock(s) {
+      if (s == null) return "—";
+      const x = Math.max(0, s);
+      const m = Math.floor(x / 60), ss = Math.floor(x % 60);
+      return m + ":" + String(ss).padStart(2,"0");
+    }
+    function card(c) {
+      const hot = c.signal && c.signal.kind && c.signal.kind !== "none";
+      const inPos = !!c.position;
+      const edge = (c.fair != null && c.mid != null) ? (c.fair - c.mid) : 0;
+      const vs = c.spot_vs_strike_bps;
+      const vsCls = vs > 2 ? "up" : vs < -2 ? "dn" : "flat";
+      const depthBid = Math.min(100, (c.yes_bid_size || 0) / 4);
+      const depthAsk = Math.min(100, (c.yes_ask_size || 0) / 4);
+      const pos = c.position
+        ? `<div class="pos">IN ${c.position.side.toUpperCase()} ×${fmt(c.position.qty,0)} @ ${fmt(c.position.entry,2)}
+           MTM ${fmt(c.position.mtm,3)}  held ${fmt(c.position.held_s,0)}s  target +${fmt(c.position.target,2)}</div>`
+        : "";
+      const sigCls = hot ? "sig edge" : "sig";
+      const sigTxt = hot
+        ? `${c.signal.kind} ${c.signal.side}  edge ${fmt(c.signal.edge,3)}  ${c.signal.reason}`
+        : (c.skip || "watching");
+      return `<article class="card${hot ? " hot" : ""}${inPos ? " in" : ""}">
+        <div class="row"><div class="asset">${c.asset}</div><div class="clock">${clock(c.seconds_left)}</div></div>
+        <div class="spot">${fmt(c.spot, c.spot >= 100 ? 2 : 6)}</div>
+        <div class="sub">strike ${fmt(c.strike, c.strike >= 100 ? 2 : 6)}
+          <span class="${vsCls}">${vs == null ? "" : (vs>=0?"+":"") + fmt(vs,1) + " bps"}</span>
+          · ${c.ticker || ""}</div>
+        <div class="quotes">
+          <div class="q"><div class="k">YES BID / ASK</div><div class="v">${fmt(c.yes_bid,2)} <span class="sub">/</span> ${fmt(c.yes_ask,2)}</div></div>
+          <div class="q"><div class="k">FAIR YES</div><div class="v">${fmt(c.fair,2)}</div></div>
+          <div class="q"><div class="k">EDGE vs MID</div><div class="v ${clsPnl(edge)}">${edge>=0?"+":""}${fmt(edge,3)}</div></div>
+        </div>
+        <div class="bars">
+          <div><div class="barline"><span>BID DEPTH</span><span>${fmt(c.yes_bid_size,0)}</span></div><div class="track"><div class="fill bid" style="width:${depthBid}%"></div></div></div>
+          <div><div class="barline"><span>ASK DEPTH</span><span>${fmt(c.yes_ask_size,0)}</span></div><div class="track"><div class="fill ask" style="width:${depthAsk}%"></div></div></div>
+        </div>
+        <div class="${sigCls}">${sigTxt}</div>
+        ${pos}
+      </article>`;
+    }
+    async function tick() {
+      try {
+        const r = await fetch("/api/state", {cache:"no-store"});
+        const s = await r.json();
+        $("mode").textContent = s.mode;
+        $("mode").className = "pill live";
+        $("feed").textContent = s.ws_ok ? "SPOT WS LIVE" : "SPOT REST";
+        $("eq").textContent = money(s.equity);
+        $("cash").textContent = money(s.cash);
+        $("pnl").textContent = money(s.realized);
+        $("pnl").className = clsPnl(s.realized);
+        $("fees").textContent = money(s.fees_paid);
+        $("open").textContent = s.open;
+        $("tick").textContent = s.tick;
+        $("cards").innerHTML = (s.cards || []).map(card).join("");
+        $("log").innerHTML = (s.log || []).slice(0, 40).map(l => {
+          const t = new Date(l.ts * 1000).toISOString().slice(11,19);
+          return `<div class="${l.level||""}">${t}  ${l.msg}</div>`;
+        }).join("");
+        $("fills").innerHTML = (s.trades || []).slice(0, 20).map(t =>
+          `<tr>
+            <td>${t.asset}</td><td>${t.side}</td>
+            <td>${fmt(t.entry,2)}</td><td>${fmt(t.exit,2)}</td>
+            <td class="${clsPnl(t.pnl)}">${money(t.pnl)}</td>
+            <td>${t.reason_out || ""}</td>
+          </tr>`
+        ).join("") || `<tr><td colspan="6" class="flat">no fills yet — waiting for a clear fast edge</td></tr>`;
+      } catch (e) {
+        $("feed").textContent = "DASHBOARD OFFLINE";
+      }
+    }
+    tick();
+    setInterval(tick, 600);
+  </script>
+</body>
+</html>

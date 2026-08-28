@@ -1,0 +1,125 @@
+"""Scalper policy. Numbers are the user's rules, not suggestions."""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field
+
+
+ASSETS = {
+    "BTC": {
+        "series": "KXBTC15M",
+        "coinbase": "BTC-USD",
+        "kraken": "XBTUSD",
+        "bitstamp": "btcusd",
+        "index": "BRTI",
+        "min_depth": 80.0,
+        "tick": 0.01,
+    },
+    "ETH": {
+        "series": "KXETH15M",
+        "coinbase": "ETH-USD",
+        "kraken": "ETHUSD",
+        "bitstamp": "ethusd",
+        "index": "ETHRTI",
+        "min_depth": 25.0,
+        "tick": 0.01,
+    },
+    "SOL": {
+        "series": "KXSOL15M",
+        "coinbase": "SOL-USD",
+        "kraken": "SOLUSD",
+        "bitstamp": "solusd",
+        "index": "SOLRTI",
+        "min_depth": 20.0,
+        "tick": 0.01,
+    },
+    "XRP": {
+        "series": "KXXRP15M",
+        "coinbase": "XRP-USD",
+        "kraken": "XRPUSD",
+        "bitstamp": "xrpusd",
+        "index": "XRPRTI",
+        "min_depth": 20.0,
+        "tick": 0.01,
+    },
+    "DOGE": {
+        "series": "KXDOGE15M",
+        "coinbase": "DOGE-USD",
+        "kraken": "DOGEUSD",
+        "bitstamp": "dogeusd",
+        "index": "DOGerti",
+        "min_depth": 15.0,
+        "tick": 0.01,
+    },
+    "BNB": {
+        "series": "KXBNB15M",
+        "coinbase": "BNB-USD",
+        "kraken": None,
+        "bitstamp": None,
+        "index": "BNBRTI",
+        "min_depth": 15.0,
+        "tick": 0.01,
+    },
+    "HYPE": {
+        "series": "KXHYPE15M",
+        "coinbase": "HYPE-USD",
+        "kraken": None,
+        "bitstamp": None,
+        "index": "HYPERI",
+        "min_depth": 15.0,
+        "tick": 0.01,
+    },
+}
+
+# CF Benchmarks ids are not required for the Coinbase/Kraken proxy.
+ASSETS["DOGE"]["index"] = "DOGerti"
+
+
+KALSHI_BASE = os.environ.get(
+    "KALSHI_API_BASE", "https://external-api.kalshi.com/trade-api/v2"
+)
+COINBASE_REST = "https://api.exchange.coinbase.com"
+COINBASE_WS = "wss://ws-feed.exchange.coinbase.com"
+KRAKEN_REST = "https://api.kraken.com/0/public/Ticker"
+BITSTAMP_REST = "https://www.bitstamp.net/api/v2/ticker"
+
+
+@dataclass
+class ScalperConfig:
+    bankroll: float = float(os.environ.get("SCALPER_BANKROLL", "1000"))
+    risk_frac: float = 0.04  # 4% of bankroll, inside 3–5%
+    risk_frac_min: float = 0.03
+    risk_frac_max: float = 0.05
+    hard_cap_frac: float = 0.10
+    min_net_edge: float = 0.04  # 4¢ after fees + half-spread
+    min_net_edge_pct: float = 0.05  # 5% of capital at risk
+    target_cents_min: float = 0.04
+    target_cents_max: float = 0.08
+    target_cents: float = 0.06
+    max_hold_seconds: float = 70.0
+    fast_fail_seconds: float = 35.0
+    fast_fail_min_move: float = 0.02
+    lag_lookback_s: float = 8.0
+    lag_confirm_s: float = 3.0
+    min_spot_move_sigma: float = 0.55
+    cooldown_s: float = 25.0
+    missed_tick_s: float = 8.0
+    max_concurrent: int = 2
+    max_spread: float = 0.03
+    flatten_before_close_s: float = 25.0
+    no_new_before_close_s: float = 40.0
+    window_warmup_s: float = 20.0
+    one_trade_per_window: bool = True
+    min_top_depth_frac: float = 0.25  # never take more than 25% of visible size
+    poll_s: float = 0.8
+    live: bool = os.environ.get("SCALPER_LIVE", "0") in {"1", "true", "TRUE", "yes"}
+    host: str = os.environ.get("SCALPER_HOST", "0.0.0.0")
+    port: int = int(os.environ.get("SCALPER_PORT", "8787"))
+    fee_multiplier: float = 1.0
+    maker_fee_multiplier: float = 0.0  # resting crypto 15m is typically maker-free
+    assets: dict = field(default_factory=lambda: ASSETS)
+
+
+def load_config() -> ScalperConfig:
+    return ScalperConfig()

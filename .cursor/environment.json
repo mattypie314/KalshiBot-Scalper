@@ -1,0 +1,17 @@
+{
+  "name": "Scotty's 15m Crypto Scalper 3000",
+  "install": "pip3 install -r requirements.txt",
+  "terminals": [
+    {
+      "name": "scalper",
+      "command": "python3 run.py",
+      "description": "Paper scalper engine and dashboard on port 8787"
+    }
+  ],
+  "ports": [
+    {
+      "name": "dashboard",
+      "port": 8787
+    }
+  ]
+}
