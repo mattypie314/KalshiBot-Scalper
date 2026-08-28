@@ -1,0 +1,4 @@
+unzip scotty-15m-crypto-scalper-3000.zip
+cd scalper
+pip install -r requirements.txt
+python3 run.py
