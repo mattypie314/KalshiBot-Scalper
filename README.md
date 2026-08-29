@@ -32,7 +32,7 @@ python3 run.py
 
 Dashboard: `http://127.0.0.1:8787`
 
-The dashboard is interactive: click a card for the book / venues / sparkline, filter and sort the board, pause new entries, mute an asset, flatten a position, and toggle **PAPER ↔ LIVE**. Keyboard: `1–7` select, `P` pause, `M` mute, `F` flatten.
+The dashboard is interactive: flip each crypto market on/off, click a card for the book / venues / sparkline, filter and sort the board, pause new entries, flatten a position, and toggle **PAPER ↔ LIVE**. Keyboard: `1–7` select, `P` pause, `M` mute, `F` flatten.
 
 **PAPER** is the default. **LIVE** sends IOC limits to your Kalshi account. The toggle stays locked until `KALSHI_API_KEY` and `KALSHI_PRIVATE_KEY` (or `KALSHI_PRIVATE_KEY_PATH`) are set. Going live asks you to type `LIVE`, then starts **paused** so you have to resume before any real order goes out. Flatten open positions before switching modes.
 

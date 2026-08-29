@@ -220,7 +220,7 @@ class Engine:
             st.skip = "paused — watching only"
             return
         if st.asset in self.muted:
-            st.skip = "muted from dashboard"
+            st.skip = "market off"
             return
 
         if sig.kind == "none":
@@ -422,12 +422,20 @@ class Engine:
                 if asset not in self.assets:
                     return {"ok": False, "error": "unknown asset"}
                 self.muted.add(asset)
-                self.note(f"muted {asset} — no new entries", "warn")
+                self.note(f"{asset} market off", "warn")
                 return {"ok": True, "muted": sorted(self.muted)}
             if op == "unmute":
                 self.muted.discard(asset)
-                self.note(f"unmuted {asset}")
+                self.note(f"{asset} market on")
                 return {"ok": True, "muted": sorted(self.muted)}
+            if op == "mute_all":
+                self.muted = set(self.assets)
+                self.note("all markets off", "warn")
+                return {"ok": True, "muted": sorted(self.muted)}
+            if op == "unmute_all":
+                self.muted.clear()
+                self.note("all markets on")
+                return {"ok": True, "muted": []}
             if op == "flatten":
                 if asset not in self.assets:
                     return {"ok": False, "error": "unknown asset"}
