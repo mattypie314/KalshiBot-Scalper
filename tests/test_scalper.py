@@ -358,6 +358,14 @@ def test_action_http_roundtrip():
             raise AssertionError("expected 400")
         except urllib.error.HTTPError as e:
             assert e.code == 400
+        head = urllib.request.Request(f"http://127.0.0.1:{port}/", method="HEAD")
+        with urllib.request.urlopen(head, timeout=3) as resp:
+            assert resp.status == 200
+            assert resp.headers.get("Content-Type", "").startswith("text/html")
+            assert resp.read() == b""
+        health = urllib.request.Request(f"http://127.0.0.1:{port}/health", method="HEAD")
+        with urllib.request.urlopen(health, timeout=3) as resp:
+            assert resp.status == 200
     finally:
         httpd.shutdown()
         httpd.server_close()
