@@ -297,7 +297,7 @@ def test_dashboard_pause_mute_and_flatten():
     eng.paused = False
     eng.muted.add("BTC")
     eng._step_asset(st, {"min_depth": 80.0}, now)
-    assert "muted" in st.skip
+    assert "market off" in st.skip
     eng.muted.clear()
 
     pos = Position(
@@ -317,6 +317,9 @@ def test_dashboard_pause_mute_and_flatten():
     assert "history" in btc
     assert "depth_bid" in btc
     assert btc["muted"] is False
+    assert eng.action({"op": "mute_all"})["ok"] is True
+    assert set(eng.muted) == set(eng.assets)
+    assert eng.action({"op": "unmute_all"})["muted"] == []
 
 
 def test_action_http_roundtrip():
