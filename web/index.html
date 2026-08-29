@@ -6,103 +6,139 @@
   <title>Scalper 3000 — 15m Crypto</title>
   <style>
     :root {
-      --bg: #07080b;
-      --panel: #101218;
-      --line: #1c2130;
-      --text: #e8edf7;
-      --dim: #8b95a8;
+      --bg: #05060a;
+      --panel: rgba(12, 14, 22, .82);
+      --line: #1c2436;
+      --text: #eef3ff;
+      --dim: #7f8ba3;
       --yes: #3dff9a;
-      --no: #ff5d6c;
+      --no: #ff4d6d;
       --amber: #ffcc66;
       --blue: #6ea8ff;
-      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      --glow: #3dff9a33;
+      --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      --btc: #f7931a; --eth: #8c8cff; --sol: #14f195; --xrp: #00aae4;
+      --doge: #c2a633; --bnb: #f3ba2f; --hype: #00f0d0;
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--mono); }
-    body { min-height: 100vh; }
+    html, body { margin: 0; min-height: 100%; color: var(--text); font-family: var(--mono); }
+    body {
+      background:
+        radial-gradient(900px 420px at 8% -10%, #123d2a55, transparent 55%),
+        radial-gradient(800px 380px at 110% 0%, #1a204055, transparent 50%),
+        linear-gradient(#07080d, #05060a);
+    }
+    body::before {
+      content: "";
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(ellipse at 50% 0%, #000 30%, transparent 80%);
+    }
+    header, main, .modal-back { position: relative; z-index: 1; }
     button {
       font-family: inherit; font-size: 11px; cursor: pointer;
-      background: #0b0d12; color: var(--text); border: 1px solid var(--line);
-      border-radius: 7px; padding: 5px 10px;
+      background: #0b0f18; color: var(--text); border: 1px solid var(--line);
+      border-radius: 8px; padding: 6px 11px; letter-spacing: .04em;
     }
-    button:hover { border-color: #3a4560; }
+    button:hover { border-color: #4a5a7a; }
     button.yes { color: var(--yes); border-color: #1e5; }
     button.warn { color: var(--amber); border-color: #a80; }
     button.danger { color: var(--no); border-color: #a33; }
-    button.on { background: #1a2418; color: var(--yes); border-color: #2a6; }
-    button.active { background: #182033; color: var(--blue); border-color: #3a5a8a; }
+    button.on { background: #14301f; color: var(--yes); border-color: #2a6; box-shadow: 0 0 12px #3dff9a22; }
+    button.active { background: #152038; color: var(--blue); border-color: #3a5a8a; }
     header {
-      display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center;
-      padding: 14px 18px; border-bottom: 1px solid var(--line);
-      position: sticky; top: 0; background: rgba(7,8,11,.92); backdrop-filter: blur(8px); z-index: 2;
+      display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center;
+      padding: 14px 20px 12px; border-bottom: 1px solid #1a2233;
+      position: sticky; top: 0; background: rgba(5,6,10,.78); backdrop-filter: blur(14px); z-index: 3;
     }
-    .logo { font-weight: 700; letter-spacing: .08em; font-size: 14px; }
-    .logo span { color: var(--yes); }
-    .pill { font-size: 11px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); }
-    .pill.live { color: var(--yes); border-color: #1e5; }
-    .pill.warn { color: var(--amber); border-color: #a80; }
-    .pill.real { color: var(--no); border-color: #a33; background: #2a1014; }
+    .logo { font-weight: 700; letter-spacing: .12em; font-size: 13px; }
+    .logo em { font-style: normal; color: var(--yes); text-shadow: 0 0 18px #3dff9a66; }
     .mode-toggle { display: flex; gap: 6px; align-items: center; }
-    .modal-back {
-      position: fixed; inset: 0; background: rgba(0,0,0,.62); z-index: 20;
-      display: flex; align-items: center; justify-content: center; padding: 18px;
-    }
-    .modal-back[hidden] { display: none; }
-    .modal {
-      width: min(460px, 100%); background: var(--panel); border: 1px solid #a33;
-      border-radius: 12px; padding: 16px 18px;
-    }
-    .modal h2 { color: var(--no); margin-bottom: 10px; }
-    .modal p { color: var(--text); font-size: 12px; line-height: 1.5; margin: 0 0 12px; }
-    .modal input {
-      width: 100%; background: #0b0d12; color: var(--text); border: 1px solid var(--line);
-      border-radius: 7px; padding: 8px 10px; font-family: inherit; font-size: 13px; margin-bottom: 12px;
-    }
-    .stats { display: flex; flex-wrap: wrap; gap: 12px 18px; margin-left: auto; font-size: 12px; }
+    .pill { font-size: 10px; padding: 4px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); letter-spacing: .08em; }
+    .pill.live { color: var(--yes); border-color: #1e5; box-shadow: 0 0 10px #3dff9a22; }
+    .pill.warn { color: var(--amber); border-color: #a80; }
+    .pill.real { color: var(--no); border-color: #a33; background: #2a1014; box-shadow: 0 0 14px #ff4d6d33; }
+    .stats { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-left: auto; font-size: 11px; color: var(--dim); }
     .stats b { color: var(--text); font-weight: 600; }
     .up { color: var(--yes); }
     .dn { color: var(--no); }
     .flat { color: var(--dim); }
-    main { padding: 14px 18px 40px; display: grid; gap: 14px; }
+    main { padding: 14px 20px 48px; display: grid; gap: 14px; }
+    .markets {
+      display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
+      padding: 10px 12px; border: 1px solid #1c2a22; border-radius: 14px;
+      background: linear-gradient(180deg, rgba(20,40,30,.45), rgba(10,12,18,.6));
+    }
+    .markets h2 { margin: 0; }
+    .mrail { display: flex; flex-wrap: wrap; gap: 8px; }
+    .mkt {
+      display: flex; align-items: center; gap: 8px;
+      border: 1px solid #243044; background: #0a0e16; border-radius: 999px;
+      padding: 5px 8px 5px 10px; color: var(--text); min-width: 108px;
+    }
+    .mkt .nm { font-size: 12px; font-weight: 700; letter-spacing: .06em; }
+    .mkt.off { opacity: .55; filter: saturate(.4); }
+    .mkt.on { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent, var(--yes)) 40%, transparent); }
+    .sw {
+      --w: 34px; width: var(--w); height: 18px; border-radius: 99px; border: 0;
+      background: #2a3144; padding: 0; position: relative; flex: 0 0 var(--w);
+    }
+    .sw i {
+      position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
+      background: #c8d0e0; transition: transform .16s ease, background .16s;
+    }
+    .sw.on { background: color-mix(in srgb, var(--accent, var(--yes)) 70%, #0b1); }
+    .sw.on i { transform: translateX(16px); background: #fff; box-shadow: 0 0 8px var(--accent, var(--yes)); }
     .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .toolbar .hint { margin-left: auto; color: var(--dim); font-size: 10px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 12px; }
     .card {
-      background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 13px 14px;
+      backdrop-filter: blur(10px);
     }
-    article.card { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
-    article.card:hover { border-color: #334; }
-    article.card.hot { border-color: #3dff9a55; box-shadow: 0 0 0 1px #3dff9a22; }
-    article.card.in { border-color: #ffcc6655; }
-    article.card.muted { opacity: .55; }
-    article.card.sel { border-color: #6ea8ff88; box-shadow: 0 0 0 1px #6ea8ff33; }
-    .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-    .asset { font-size: 18px; font-weight: 700; }
-    .clock { color: var(--amber); font-size: 12px; }
-    .spot { font-size: 20px; margin: 6px 0 2px; }
+    article.card {
+      cursor: pointer; overflow: hidden;
+      transition: border-color .15s, box-shadow .15s, transform .15s;
+      box-shadow: 0 10px 30px #0006;
+    }
+    article.card::before {
+      content: ""; display: block; height: 3px; margin: -13px -14px 12px;
+      background: linear-gradient(90deg, var(--accent, #3dff9a), transparent 80%);
+    }
+    article.card:hover { transform: translateY(-1px); border-color: #3a4a66; }
+    article.card.hot { border-color: #3dff9a66; box-shadow: 0 0 0 1px #3dff9a33, 0 12px 36px #3dff9a14; }
+    article.card.in { border-color: #ffcc6666; }
+    article.card.off { opacity: .5; filter: grayscale(.25); }
+    article.card.sel { border-color: #6ea8ff88; box-shadow: 0 0 0 1px #6ea8ff44; }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .asset { font-size: 18px; font-weight: 700; letter-spacing: .04em; color: var(--accent, var(--text)); }
+    .clock { color: var(--amber); font-size: 12px; text-shadow: 0 0 10px #ffcc6644; }
+    .spot { font-size: 22px; margin: 8px 0 2px; font-weight: 600; letter-spacing: .02em; }
     .sub { color: var(--dim); font-size: 11px; }
     .quotes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 10px 0; }
-    .q { background: #0b0d12; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
-    .q .k { color: var(--dim); font-size: 10px; letter-spacing: .06em; }
-    .q .v { font-size: 16px; margin-top: 2px; }
+    .q { background: #080b12; border: 1px solid #1b2233; border-radius: 10px; padding: 8px; }
+    .q .k { color: var(--dim); font-size: 9px; letter-spacing: .1em; }
+    .q .v { font-size: 16px; margin-top: 3px; }
     .sig { font-size: 11px; color: var(--dim); min-height: 2.6em; margin-top: 6px; }
-    .sig.edge { color: var(--yes); }
+    .sig.edge { color: var(--yes); text-shadow: 0 0 10px #3dff9a33; }
     .bars { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
     .barline { display: flex; justify-content: space-between; font-size: 10px; color: var(--dim); }
     .track { height: 6px; background: #0b0d12; border-radius: 99px; overflow: hidden; margin-top: 3px; }
     .fill { height: 100%; background: var(--blue); }
     .fill.ask { background: var(--no); }
     .fill.bid { background: var(--yes); }
-    .winbar { height: 4px; background: #0b0d12; border-radius: 99px; overflow: hidden; margin: 8px 0 0; }
-    .winbar i { display: block; height: 100%; background: var(--amber); }
+    .winbar { height: 3px; background: #0b0d12; border-radius: 99px; overflow: hidden; margin: 8px 0 0; }
+    .winbar i { display: block; height: 100%; background: var(--accent, var(--amber)); }
     .pos { margin-top: 8px; font-size: 12px; color: var(--amber); }
-    .acts { display: flex; gap: 6px; margin-top: 8px; }
-    .spark { display: block; margin-top: 8px; width: 100%; height: 28px; }
+    .acts { display: flex; gap: 6px; margin-top: 8px; align-items: center; }
+    .spark { display: block; margin-top: 8px; width: 100%; height: 32px; }
     .detail { display: grid; grid-template-columns: 1.1fr 1fr .9fr; gap: 12px; }
     .bottom { display: grid; grid-template-columns: 1.2fr .8fr; gap: 12px; }
     @media (max-width: 980px) {
-      .detail { grid-template-columns: 1fr; }
-      .bottom { grid-template-columns: 1fr; }
+      .detail, .bottom, .markets { grid-template-columns: 1fr; }
       .stats { margin-left: 0; }
       .toolbar .hint { margin-left: 0; }
     }
@@ -119,7 +155,7 @@
     .log div.click { cursor: pointer; }
     .log div.click:hover { color: var(--text); }
     .rules { color: var(--dim); font-size: 11px; line-height: 1.55; }
-    h2 { font-size: 12px; letter-spacing: .08em; color: var(--dim); font-weight: 600; margin: 0 0 8px; }
+    h2 { font-size: 11px; letter-spacing: .14em; color: var(--dim); font-weight: 600; margin: 0 0 8px; }
     .ladder { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 11px; }
     .lvl { display: grid; grid-template-columns: 56px 1fr 40px; gap: 6px; align-items: center; margin: 2px 0; }
     .lvl .bar { height: 8px; background: #0b0d12; border-radius: 99px; overflow: hidden; }
@@ -127,11 +163,26 @@
     .src { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; }
     .src span { background: #0b0d12; border: 1px solid var(--line); border-radius: 7px; padding: 4px 7px; }
     .empty { color: var(--dim); font-size: 12px; }
+    .modal-back {
+      position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 20;
+      display: flex; align-items: center; justify-content: center; padding: 18px;
+    }
+    .modal-back[hidden] { display: none; }
+    .modal {
+      width: min(460px, 100%); background: #0d1018; border: 1px solid #a33;
+      border-radius: 14px; padding: 16px 18px; box-shadow: 0 20px 60px #000a, 0 0 30px #ff4d6d22;
+    }
+    .modal h2 { color: var(--no); margin-bottom: 10px; }
+    .modal p { color: var(--text); font-size: 12px; line-height: 1.5; margin: 0 0 12px; }
+    .modal input {
+      width: 100%; background: #0b0d12; color: var(--text); border: 1px solid var(--line);
+      border-radius: 7px; padding: 8px 10px; font-family: inherit; font-size: 13px; margin-bottom: 12px;
+    }
   </style>
 </head>
 <body>
   <header>
-    <div class="logo">SCOTTY’S <span>15m CRYPTO SCALPER 3000</span></div>
+    <div class="logo">SCOTTY’S <em>15m CRYPTO SCALPER 3000</em></div>
     <div class="mode-toggle">
       <button id="btnPaper" type="button">PAPER</button>
       <button id="btnLive" type="button" class="danger">LIVE</button>
@@ -152,18 +203,26 @@
     </div>
   </header>
   <main>
+    <section class="markets">
+      <h2>MARKETS</h2>
+      <div class="mrail" id="markets"></div>
+      <div class="toolbar">
+        <button type="button" id="btnAllOn">ALL ON</button>
+        <button type="button" id="btnAllOff">ALL OFF</button>
+      </div>
+    </section>
     <section class="toolbar">
       <button type="button" data-filter="all" class="active">ALL</button>
       <button type="button" data-filter="edge">EDGE</button>
       <button type="button" data-filter="in">IN</button>
       <button type="button" data-filter="watch">WATCH</button>
-      <button type="button" data-filter="muted">MUTED</button>
+      <button type="button" data-filter="muted">OFF</button>
       <span class="sub">sort</span>
       <button type="button" data-sort="name" class="active">NAME</button>
       <button type="button" data-sort="edge">EDGE</button>
       <button type="button" data-sort="clock">CLOCK</button>
       <button type="button" data-sort="spread">SPREAD</button>
-      <div class="hint">click a card · 1–7 select · P pause · F flatten · M mute · PAPER/LIVE toggle</div>
+      <div class="hint">flip a market · click a card · 1–7 select · P pause · F flatten</div>
     </section>
     <section class="grid" id="cards"></section>
     <section class="detail" id="detail" hidden></section>
@@ -205,6 +264,7 @@
   </div>
   <script>
     const $ = (id) => document.getElementById(id);
+    const ACCENT = {BTC:"var(--btc)",ETH:"var(--eth)",SOL:"var(--sol)",XRP:"var(--xrp)",DOGE:"var(--doge)",BNB:"var(--bnb)",HYPE:"var(--hype)"};
     const fmt = (n, d=2) => n == null || Number.isNaN(n) ? "—" : Number(n).toLocaleString(undefined, {minimumFractionDigits:d, maximumFractionDigits:d});
     const money = (n) => n == null ? "—" : (n < 0 ? "-" : "") + "$" + fmt(Math.abs(n), 2);
     const clsPnl = (n) => n > 0.0001 ? "up" : n < -0.0001 ? "dn" : "flat";
@@ -216,7 +276,7 @@
       const m = Math.floor(x / 60), ss = Math.floor(x % 60);
       return m + ":" + String(ss).padStart(2,"0");
     }
-    function spark(hist, w=220, h=28) {
+    function spark(hist, w=220, h=32) {
       if (!hist || hist.length < 2) return "";
       const fairs = hist.map(p => p.fair).filter(v => v != null);
       const mids = hist.map(p => p.mid).filter(v => v != null);
@@ -228,8 +288,8 @@
       const y = (v) => h - 2 - ((v - lo) / span) * (h - 4);
       const path = (arr) => arr.map((v, i) => `${i ? "L" : "M"}${x(i, arr.length).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
       return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
-        <path d="${path(mids)}" fill="none" stroke="#6ea8ff" stroke-width="1.2"/>
-        <path d="${path(fairs)}" fill="none" stroke="#3dff9a" stroke-width="1.2"/>
+        <path d="${path(mids)}" fill="none" stroke="#6ea8ff" stroke-width="1.4"/>
+        <path d="${path(fairs)}" fill="none" stroke="#3dff9a" stroke-width="1.4"/>
       </svg>`;
     }
     function winFrac(c) {
@@ -252,6 +312,9 @@
       if (ui.sort === "spread") return (a.spread ?? 9) - (b.spread ?? 9);
       return a.asset.localeCompare(b.asset);
     }
+    function sw(on, asset) {
+      return `<button type="button" class="sw ${on ? "on" : ""}" data-act="mute" data-asset="${asset}" aria-pressed="${on}" title="${on ? "market on" : "market off"}"><i></i></button>`;
+    }
     function card(c) {
       const hot = c.signal && c.signal.kind && c.signal.kind !== "none";
       const inPos = !!c.position;
@@ -268,10 +331,17 @@
       const sigTxt = hot
         ? `${c.signal.kind} ${c.signal.side}  edge ${fmt(c.signal.edge,3)}  ${c.signal.reason}`
         : (c.skip || "watching");
-      const cls = ["card", hot ? "hot" : "", inPos ? "in" : "", c.muted ? "muted" : "", ui.selected === c.asset ? "sel" : ""]
+      const cls = ["card", hot ? "hot" : "", inPos ? "in" : "", c.muted ? "off" : "", ui.selected === c.asset ? "sel" : ""]
         .filter(Boolean).join(" ");
-      return `<article class="${cls}" data-asset="${c.asset}">
-        <div class="row"><div class="asset">${c.asset}${c.muted ? " · MUTED" : ""}</div><div class="clock">${clock(c.seconds_left)}</div></div>
+      const accent = ACCENT[c.asset] || "var(--yes)";
+      return `<article class="${cls}" data-asset="${c.asset}" style="--accent:${accent}">
+        <div class="row">
+          <div class="asset">${c.asset}${c.muted ? " · OFF" : ""}</div>
+          <div class="row" style="gap:10px">
+            ${sw(!c.muted, c.asset)}
+            <div class="clock">${clock(c.seconds_left)}</div>
+          </div>
+        </div>
         <div class="winbar" title="window elapsed"><i style="width:${(winFrac(c)*100).toFixed(1)}%"></i></div>
         <div class="spot">${fmt(c.spot, c.spot >= 100 ? 2 : 6)}</div>
         <div class="sub">strike ${fmt(c.strike, c.strike >= 100 ? 2 : 6)}
@@ -291,11 +361,14 @@
         </div>
         <div class="${sigCls}">${sigTxt}</div>
         ${pos}
-        <div class="acts">
-          <button type="button" data-act="mute" data-asset="${c.asset}">${c.muted ? "UNMUTE" : "MUTE"}</button>
-          ${inPos ? `<button type="button" class="danger" data-act="flatten" data-asset="${c.asset}">FLATTEN</button>` : ""}
-        </div>
+        ${inPos ? `<div class="acts"><button type="button" class="danger" data-act="flatten" data-asset="${c.asset}">FLATTEN</button></div>` : ""}
       </article>`;
+    }
+    function marketChip(c) {
+      const accent = ACCENT[c.asset] || "var(--yes)";
+      return `<div class="mkt ${c.muted ? "off" : "on"}" style="--accent:${accent}">
+        <span class="nm">${c.asset}</span>${sw(!c.muted, c.asset)}
+      </div>`;
     }
     function levels(rows, kind) {
       const max = Math.max(1, ...rows.map(r => r.sz || 0));
@@ -312,8 +385,9 @@
       const lock = c.locked_avg != null
         ? `locked ${fmt(c.locked_secs,0)}s @ ${fmt(c.locked_avg, c.locked_avg >= 100 ? 2 : 6)}`
         : "not in settlement minute";
+      const accent = ACCENT[c.asset] || "var(--yes)";
       return `
-        <div class="card">
+        <div class="card" style="--accent:${accent}">
           <h2>${c.asset} BOOK</h2>
           <div class="ladder">
             <div><div class="sub">YES BIDS</div>${levels(c.depth_bid || [], "bid")}</div>
@@ -335,7 +409,7 @@
           <div class="sub" style="margin-top:10px">spot ${fmt(c.spot, c.spot>=100?2:6)} vs strike ${fmt(c.strike, c.strike>=100?2:6)}
             ${c.spot_chg == null ? "" : " · " + (c.spot_chg>=0?"+":"") + fmt(c.spot_chg, c.spot>=100?2:4) + " / 8s"}</div>
           <div class="acts" style="margin-top:12px">
-            <button type="button" data-act="mute" data-asset="${c.asset}">${c.muted ? "UNMUTE" : "MUTE"}</button>
+            ${sw(!c.muted, c.asset)}
             ${c.position ? `<button type="button" class="danger" data-act="flatten" data-asset="${c.asset}">FLATTEN</button>` : ""}
             <button type="button" data-act="clear">CLOSE</button>
           </div>
@@ -377,27 +451,20 @@
       if (j && j.ok) closeLiveModal();
       else $("modeModalMsg").textContent = (j && j.error) || "could not go live";
     }
-    function bind(root) {
-      root.querySelectorAll("[data-asset]").forEach(el => {
-        if (el.tagName === "BUTTON") return;
-        el.addEventListener("click", () => {
-          ui.selected = ui.selected === el.dataset.asset ? null : el.dataset.asset;
-          render(ui.last);
-        });
-      });
-      root.querySelectorAll("[data-act]").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const a = btn.dataset.act;
-          if (a === "clear") { ui.selected = null; render(ui.last); return; }
-          if (a === "mute") {
-            const card = (ui.last.cards || []).find(c => c.asset === btn.dataset.asset);
-            act(card && card.muted ? "unmute" : "mute", btn.dataset.asset);
-            return;
-          }
-          act(a, btn.dataset.asset);
-        });
-      });
+    function handleAct(btn) {
+      const a = btn.dataset.act;
+      if (a === "clear") { ui.selected = null; if (ui.last) render(ui.last); return; }
+      if (a === "mute") {
+        const card = ((ui.last && ui.last.cards) || []).find(c => c.asset === btn.dataset.asset);
+        act(card && card.muted ? "unmute" : "mute", btn.dataset.asset);
+        return;
+      }
+      act(a, btn.dataset.asset);
+    }
+    function selectAsset(asset) {
+      if (!asset) return;
+      ui.selected = ui.selected === asset ? null : asset;
+      if (ui.last) render(ui.last);
     }
     function render(s) {
       ui.last = s;
@@ -421,9 +488,11 @@
       const st = s.stats || {};
       $("wl").textContent = `${st.wins || 0}/${st.losses || 0}`;
       $("wl").className = (st.wins || 0) === (st.losses || 0) ? "flat" : (st.wins > st.losses ? "up" : "dn");
-      const cards = (s.cards || []).filter(showCard).sort(sortCards);
+      const all = (s.cards || []).slice().sort((a,b) => a.asset.localeCompare(b.asset));
+      $("markets").innerHTML = all.map(marketChip).join("");
+      const cards = all.filter(showCard).sort(sortCards);
       $("cards").innerHTML = cards.map(card).join("") || `<div class="empty">no markets match this filter</div>`;
-      const sel = (s.cards || []).find(c => c.asset === ui.selected);
+      const sel = all.find(c => c.asset === ui.selected);
       const d = $("detail");
       if (sel) { d.hidden = false; d.innerHTML = detailHTML(sel); }
       else { d.hidden = true; d.innerHTML = ""; }
@@ -452,15 +521,6 @@
         `Out at ${r.target || "+4–8¢"} or ${r.dead || "when the edge dies"}.`,
         `${r.chase || "Do not chase a missed tick"}. Session ${st.n || 0} fills · win ${fmt(st.win_pct,0)}% · avg ${money(st.avg_pnl)} · hold ${fmt(st.avg_hold_s,0)}s.`,
       ].join(" ");
-      bind($("cards"));
-      bind($("detail"));
-      document.querySelectorAll("[data-pick]").forEach(el => {
-        el.addEventListener("click", () => {
-          if (!el.dataset.pick) return;
-          ui.selected = el.dataset.pick;
-          render(ui.last);
-        });
-      });
     }
     async function tick() {
       try {
@@ -470,10 +530,36 @@
         $("feed").textContent = "DASHBOARD OFFLINE";
       }
     }
+    $("markets").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-act]");
+      if (btn && $("markets").contains(btn)) { handleAct(btn); return; }
+      const chip = e.target.closest(".mkt");
+      if (chip && chip.querySelector("[data-asset]")) selectAsset(chip.querySelector("[data-asset]").dataset.asset);
+    });
+    $("cards").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-act]");
+      if (btn && $("cards").contains(btn)) { handleAct(btn); return; }
+      const art = e.target.closest("article.card");
+      if (art) selectAsset(art.dataset.asset);
+    });
+    $("detail").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-act]");
+      if (btn && $("detail").contains(btn)) handleAct(btn);
+    });
+    $("log").addEventListener("click", (e) => {
+      const el = e.target.closest("[data-pick]");
+      if (el) selectAsset(el.dataset.pick);
+    });
+    $("fills").addEventListener("click", (e) => {
+      const el = e.target.closest("[data-pick]");
+      if (el) selectAsset(el.dataset.pick);
+    });
     $("btnPause").addEventListener("click", () => {
       const paused = !!(ui.last && ui.last.paused);
       act(paused ? "resume" : "pause");
     });
+    $("btnAllOn").addEventListener("click", () => act("unmute_all"));
+    $("btnAllOff").addEventListener("click", () => act("mute_all"));
     $("btnPaper").addEventListener("click", () => {
       if (ui.last && ui.last.mode === "PAPER") return;
       act("mode", {mode: "PAPER"});
