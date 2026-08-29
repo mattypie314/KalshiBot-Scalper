@@ -451,27 +451,20 @@
       if (j && j.ok) closeLiveModal();
       else $("modeModalMsg").textContent = (j && j.error) || "could not go live";
     }
-    function bind(root) {
-      root.querySelectorAll("[data-asset]").forEach(el => {
-        if (el.matches("button, .sw, .mkt")) return;
-        el.addEventListener("click", () => {
-          ui.selected = ui.selected === el.dataset.asset ? null : el.dataset.asset;
-          render(ui.last);
-        });
-      });
-      root.querySelectorAll("[data-act]").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const a = btn.dataset.act;
-          if (a === "clear") { ui.selected = null; render(ui.last); return; }
-          if (a === "mute") {
-            const card = (ui.last.cards || []).find(c => c.asset === btn.dataset.asset);
-            act(card && card.muted ? "unmute" : "mute", btn.dataset.asset);
-            return;
-          }
-          act(a, btn.dataset.asset);
-        });
-      });
+    function handleAct(btn) {
+      const a = btn.dataset.act;
+      if (a === "clear") { ui.selected = null; if (ui.last) render(ui.last); return; }
+      if (a === "mute") {
+        const card = ((ui.last && ui.last.cards) || []).find(c => c.asset === btn.dataset.asset);
+        act(card && card.muted ? "unmute" : "mute", btn.dataset.asset);
+        return;
+      }
+      act(a, btn.dataset.asset);
+    }
+    function selectAsset(asset) {
+      if (!asset) return;
+      ui.selected = ui.selected === asset ? null : asset;
+      if (ui.last) render(ui.last);
     }
     function render(s) {
       ui.last = s;
@@ -528,16 +521,6 @@
         `Out at ${r.target || "+4–8¢"} or ${r.dead || "when the edge dies"}.`,
         `${r.chase || "Do not chase a missed tick"}. Session ${st.n || 0} fills · win ${fmt(st.win_pct,0)}% · avg ${money(st.avg_pnl)} · hold ${fmt(st.avg_hold_s,0)}s.`,
       ].join(" ");
-      bind($("markets"));
-      bind($("cards"));
-      bind($("detail"));
-      document.querySelectorAll("[data-pick]").forEach(el => {
-        el.addEventListener("click", () => {
-          if (!el.dataset.pick) return;
-          ui.selected = el.dataset.pick;
-          render(ui.last);
-        });
-      });
     }
     async function tick() {
       try {
@@ -547,6 +530,30 @@
         $("feed").textContent = "DASHBOARD OFFLINE";
       }
     }
+    $("markets").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-act]");
+      if (btn && $("markets").contains(btn)) { handleAct(btn); return; }
+      const chip = e.target.closest(".mkt");
+      if (chip && chip.querySelector("[data-asset]")) selectAsset(chip.querySelector("[data-asset]").dataset.asset);
+    });
+    $("cards").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-act]");
+      if (btn && $("cards").contains(btn)) { handleAct(btn); return; }
+      const art = e.target.closest("article.card");
+      if (art) selectAsset(art.dataset.asset);
+    });
+    $("detail").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-act]");
+      if (btn && $("detail").contains(btn)) handleAct(btn);
+    });
+    $("log").addEventListener("click", (e) => {
+      const el = e.target.closest("[data-pick]");
+      if (el) selectAsset(el.dataset.pick);
+    });
+    $("fills").addEventListener("click", (e) => {
+      const el = e.target.closest("[data-pick]");
+      if (el) selectAsset(el.dataset.pick);
+    });
     $("btnPause").addEventListener("click", () => {
       const paused = !!(ui.last && ui.last.paused);
       act(paused ? "resume" : "pause");
