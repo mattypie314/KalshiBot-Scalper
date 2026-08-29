@@ -24,23 +24,36 @@ class Handler(BaseHTTPRequestHandler):
             self._file(WEB / "index.html", "text/html; charset=utf-8")
             return
         if path == "/api/state":
-            body = json.dumps(self.engine.state()).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            self._json(200, self.engine.state())
             return
         if path == "/health":
-            body = b'{"ok":true}'
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            self._json(200, {"ok": True})
             return
         self.send_error(404)
+
+    def do_POST(self) -> None:  # noqa: N802
+        path = self.path.split("?", 1)[0]
+        if path != "/api/action":
+            self.send_error(404)
+            return
+        raw = self.rfile.read(int(self.headers.get("Content-Length") or 0) or 0)
+        try:
+            payload = json.loads(raw.decode() or "{}")
+            if not isinstance(payload, dict):
+                raise ValueError("payload must be an object")
+        except (ValueError, UnicodeDecodeError) as e:
+            self._json(400, {"ok": False, "error": str(e)})
+            return
+        self._json(200, self.engine.action(payload))
+
+    def _json(self, code: int, obj: dict) -> None:
+        body = json.dumps(obj).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def _file(self, p: Path, ctype: str) -> None:
         if not p.exists():
