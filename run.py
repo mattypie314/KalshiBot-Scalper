@@ -19,6 +19,7 @@ def main() -> None:
     engine = Engine(cfg)
     serve(engine, cfg.host, cfg.port)
     print(f"Scalper 3000 dashboard  http://127.0.0.1:{cfg.port}", flush=True)
+    print(f"Markets: {', '.join(cfg.assets)}", flush=True)
     print("PAPER mode. Limits only. 3–5% size. Out at +4–8¢ or when the edge dies.", flush=True)
     try:
         engine.loop()

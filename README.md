@@ -30,6 +30,13 @@ python3 -m pip install -r requirements.txt
 python3 run.py
 ```
 
+BTC only (same app — Coinbase/Kalshi feeds for BTC, no ETH/SOL/etc):
+
+```bash
+python3 run_btc.py
+# or: SCALPER_ASSETS=BTC python3 run.py
+```
+
 Dashboard: `http://127.0.0.1:8787` on the machine that is running `python3 run.py`. That address is not your phone or laptop unless the scalper is running there. In Cursor Cloud, open the forwarded **dashboard** port (8787) from the agent Ports panel.
 
 The dashboard is interactive: flip each crypto market on/off, click a card for the book / venues / sparkline, filter and sort the board, pause new entries, flatten a position, and toggle **PAPER ↔ LIVE**. Keyboard: `1–7` select, `P` pause, `M` mute, `F` flatten.
@@ -39,6 +46,7 @@ The dashboard is interactive: flip each crypto market on/off, click a card for t
 ```bash
 export SCALPER_BANKROLL=1000
 export SCALPER_PORT=8787
+export SCALPER_ASSETS=BTC          # optional; comma list, default is all 7
 # required only for the LIVE toggle
 # export KALSHI_API_KEY="your-key-id"
 # export KALSHI_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----..."
