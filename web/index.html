@@ -41,6 +41,23 @@
     .pill { font-size: 11px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); }
     .pill.live { color: var(--yes); border-color: #1e5; }
     .pill.warn { color: var(--amber); border-color: #a80; }
+    .pill.real { color: var(--no); border-color: #a33; background: #2a1014; }
+    .mode-toggle { display: flex; gap: 6px; align-items: center; }
+    .modal-back {
+      position: fixed; inset: 0; background: rgba(0,0,0,.62); z-index: 20;
+      display: flex; align-items: center; justify-content: center; padding: 18px;
+    }
+    .modal-back[hidden] { display: none; }
+    .modal {
+      width: min(460px, 100%); background: var(--panel); border: 1px solid #a33;
+      border-radius: 12px; padding: 16px 18px;
+    }
+    .modal h2 { color: var(--no); margin-bottom: 10px; }
+    .modal p { color: var(--text); font-size: 12px; line-height: 1.5; margin: 0 0 12px; }
+    .modal input {
+      width: 100%; background: #0b0d12; color: var(--text); border: 1px solid var(--line);
+      border-radius: 7px; padding: 8px 10px; font-family: inherit; font-size: 13px; margin-bottom: 12px;
+    }
     .stats { display: flex; flex-wrap: wrap; gap: 12px 18px; margin-left: auto; font-size: 12px; }
     .stats b { color: var(--text); font-weight: 600; }
     .up { color: var(--yes); }
@@ -115,6 +132,10 @@
 <body>
   <header>
     <div class="logo">SCOTTY’S <span>15m CRYPTO SCALPER 3000</span></div>
+    <div class="mode-toggle">
+      <button id="btnPaper" type="button">PAPER</button>
+      <button id="btnLive" type="button" class="danger">LIVE</button>
+    </div>
     <div class="pill" id="mode">PAPER</div>
     <div class="pill" id="feed">FEED …</div>
     <div class="pill" id="armed">ARMED</div>
@@ -142,7 +163,7 @@
       <button type="button" data-sort="edge">EDGE</button>
       <button type="button" data-sort="clock">CLOCK</button>
       <button type="button" data-sort="spread">SPREAD</button>
-      <div class="hint">click a card · 1–7 select · P pause · F flatten · M mute</div>
+      <div class="hint">click a card · 1–7 select · P pause · F flatten · M mute · PAPER/LIVE toggle</div>
     </section>
     <section class="grid" id="cards"></section>
     <section class="detail" id="detail" hidden></section>
@@ -171,6 +192,17 @@
       </div>
     </section>
   </main>
+  <div class="modal-back" id="modeModal" hidden>
+    <div class="modal">
+      <h2>REAL MONEY</h2>
+      <p id="modeModalMsg">This sends limit IOCs to your Kalshi account. Type LIVE to confirm.</p>
+      <input id="modeConfirm" autocomplete="off" spellcheck="false" placeholder="type LIVE" />
+      <div class="acts">
+        <button type="button" class="danger" id="modeGo">GO LIVE</button>
+        <button type="button" id="modeCancel">CANCEL</button>
+      </div>
+    </div>
+  </div>
   <script>
     const $ = (id) => document.getElementById(id);
     const fmt = (n, d=2) => n == null || Number.isNaN(n) ? "—" : Number(n).toLocaleString(undefined, {minimumFractionDigits:d, maximumFractionDigits:d});
@@ -309,15 +341,41 @@
           </div>
         </div>`;
     }
-    async function act(op, asset) {
+    async function act(op, extra) {
+      const payload = Object.assign({op}, typeof extra === "string" ? {asset: extra} : (extra || {}));
       const r = await fetch("/api/action", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({op, asset}),
+        body: JSON.stringify(payload),
       });
       const j = await r.json();
       if (!j.ok) $("feed").textContent = j.error || "ACTION FAILED";
       await tick();
+      return j;
+    }
+    function openLiveModal(msg, needType) {
+      $("modeModalMsg").textContent = msg;
+      $("modeConfirm").value = "";
+      $("modeConfirm").hidden = !needType;
+      $("modeGo").hidden = !needType;
+      $("modeModal").hidden = false;
+      if (needType) $("modeConfirm").focus();
+    }
+    function closeLiveModal() { $("modeModal").hidden = true; }
+    async function requestLive() {
+      const s = ui.last || {};
+      if (s.mode === "LIVE") return;
+      if (!s.live_ready) {
+        openLiveModal(s.live_error || "Kalshi keys missing. Set KALSHI_API_KEY and KALSHI_PRIVATE_KEY.", false);
+        return;
+      }
+      openLiveModal("This spends real Kalshi cash with IOC limits at the touch. Flatten first if anything is open. Type LIVE to arm real-money mode (starts paused).", true);
+    }
+    async function confirmLive() {
+      const typed = ($("modeConfirm").value || "").trim();
+      const j = await act("mode", {mode: "LIVE", confirm: typed});
+      if (j && j.ok) closeLiveModal();
+      else $("modeModalMsg").textContent = (j && j.error) || "could not go live";
     }
     function bind(root) {
       root.querySelectorAll("[data-asset]").forEach(el => {
@@ -343,8 +401,10 @@
     }
     function render(s) {
       ui.last = s;
-      $("mode").textContent = s.mode;
-      $("mode").className = "pill live";
+      $("mode").textContent = s.mode === "LIVE" ? "LIVE $ REAL" : "PAPER";
+      $("mode").className = "pill " + (s.mode === "LIVE" ? "real" : "live");
+      $("btnPaper").className = s.mode !== "LIVE" ? "yes on" : "";
+      $("btnLive").className = s.mode === "LIVE" ? "danger on" : "danger";
       $("feed").textContent = s.ws_ok ? "SPOT WS LIVE" : "SPOT REST";
       $("armed").textContent = s.paused ? "PAUSED" : "ARMED";
       $("armed").className = "pill " + (s.paused ? "warn" : "live");
@@ -384,6 +444,9 @@
       ).join("") || `<tr><td colspan="8" class="flat">no fills yet — waiting for a clear fast edge</td></tr>`;
       const r = s.rules || {};
       $("rules").innerHTML = [
+        s.mode === "LIVE"
+          ? `REAL MONEY. IOC limits hit your Kalshi account.`
+          : `PAPER. Same signals, no Kalshi orders.`,
         `Watch live spot vs Kalshi Yes/No. Enter only a clear, fast mismatch.`,
         `Size ${r.size || "3–5% (cap 10%)"}. ${r.orders || "Limits only"}.`,
         `Out at ${r.target || "+4–8¢"} or ${r.dead || "when the edge dies"}.`,
@@ -410,6 +473,20 @@
     $("btnPause").addEventListener("click", () => {
       const paused = !!(ui.last && ui.last.paused);
       act(paused ? "resume" : "pause");
+    });
+    $("btnPaper").addEventListener("click", () => {
+      if (ui.last && ui.last.mode === "PAPER") return;
+      act("mode", {mode: "PAPER"});
+    });
+    $("btnLive").addEventListener("click", requestLive);
+    $("modeCancel").addEventListener("click", closeLiveModal);
+    $("modeGo").addEventListener("click", confirmLive);
+    $("modeConfirm").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") confirmLive();
+      if (e.key === "Escape") closeLiveModal();
+    });
+    $("modeModal").addEventListener("click", (e) => {
+      if (e.target === $("modeModal")) closeLiveModal();
     });
     document.querySelectorAll("[data-filter]").forEach(btn => {
       btn.addEventListener("click", () => {
@@ -439,6 +516,7 @@
         const c = cards[Number(e.key) - 1];
         if (c) { ui.selected = c.asset; render(ui.last); }
       } else if (e.key === "Escape") {
+        if (!$("modeModal").hidden) { closeLiveModal(); return; }
         ui.selected = null; if (ui.last) render(ui.last);
       } else if (e.key === "p" || e.key === "P") {
         act(ui.last && ui.last.paused ? "resume" : "pause");

@@ -360,6 +360,119 @@ def test_action_http_roundtrip():
         httpd.server_close()
 
 
+class _FakeKalshi:
+    def __init__(self):
+        self.ready = True
+        self.cash = 250.0
+        self.orders = []
+        self.fill_qty = 5.0
+        self.fail_balance = False
+
+    def balance(self):
+        if self.fail_balance:
+            raise RuntimeError("auth exploded")
+        return self.cash
+
+    def market_position_count(self):
+        return 0
+
+    def ioc(self, ticker, book_side, qty, yes_price):
+        from scalper.kalshi_api import LiveFill
+
+        self.orders.append({"ticker": ticker, "side": book_side, "qty": qty, "px": yes_price})
+        if self.fill_qty < 1:
+            return LiveFill(ok=False, error="live IOC unfilled")
+        return LiveFill(ok=True, qty=self.fill_qty, price=yes_price, fee=0.02, order_id="ord1")
+
+
+def test_live_toggle_requires_confirm_and_keys():
+    from scalper.engine import Engine
+
+    eng = Engine(ScalperConfig())
+    snap = eng.state()
+    assert snap["mode"] == "PAPER"
+    assert snap["live_ready"] is False
+    no_confirm = eng.action({"op": "mode", "mode": "LIVE"})
+    assert no_confirm["ok"] is False
+    assert no_confirm.get("need_confirm") is True
+    blocked = eng.action({"op": "mode", "mode": "LIVE", "confirm": "LIVE"})
+    assert blocked["ok"] is False
+    assert "keys" in blocked["error"].lower()
+    assert eng.mode == "PAPER"
+
+
+def test_live_toggle_with_client_and_orders():
+    from scalper.broker import Position
+    from scalper.engine import Engine
+
+    api = _FakeKalshi()
+    eng = Engine(ScalperConfig(), kalshi_api=api)
+    assert eng.state()["live_ready"] is True
+    assert eng.action({"op": "mode", "mode": "LIVE", "confirm": "LIVE"})["ok"] is True
+    assert eng.mode == "LIVE"
+    assert eng.paused is True
+    assert eng.broker.cash == 250.0
+
+    pos = Position(
+        asset="BTC", ticker="KXBTC15M-TEST", side="yes", qty=5, entry=0.42,
+        entry_ts=time.time(), fees=0.0, target=0.06, reason_in="t", kind="lag_yes",
+    )
+    fill = eng._live_enter(pos)
+    assert fill.ok is True
+    assert api.orders[-1]["side"] == "bid"
+    assert api.orders[-1]["px"] == 0.42
+
+    no_pos = Position(
+        asset="ETH", ticker="KXETH15M-TEST", side="no", qty=4, entry=0.40,
+        entry_ts=time.time(), fees=0.0, target=0.06, reason_in="t", kind="lag_no",
+    )
+    fill_no = eng._live_enter(no_pos)
+    assert fill_no.ok is True
+    assert api.orders[-1]["side"] == "ask"
+    assert abs(api.orders[-1]["px"] - 0.60) < 1e-9
+    assert abs(fill_no.price - 0.40) < 1e-9
+
+    api.fill_qty = 0
+    miss = eng._live_enter(pos)
+    assert miss.ok is False
+    api.fill_qty = 5
+
+    stuck = eng.action({"op": "mode", "mode": "PAPER"})
+    # no live positions yet
+    assert stuck["ok"] is True
+    assert eng.mode == "PAPER"
+
+    eng.action({"op": "mode", "mode": "LIVE", "confirm": "LIVE"})
+    eng.broker.positions["BTC"] = pos
+    assert eng.action({"op": "mode", "mode": "PAPER"})["ok"] is False
+    del eng.broker.positions["BTC"]
+    eng.action({"op": "mode", "mode": "PAPER"})
+    eng.broker.positions["BTC"] = pos
+    assert "flatten" in eng.action({"op": "mode", "mode": "LIVE", "confirm": "LIVE"})["error"]
+
+
+def test_sign_request_roundtrip():
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import padding, rsa
+    from scalper.kalshi_api import sign_request
+    import base64
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode()
+    ts, method, path = "1700000000000", "GET", "/trade-api/v2/portfolio/balance"
+    sig = sign_request(pem, ts, method, path)
+    key.public_key().verify(
+        base64.b64decode(sig),
+        f"{ts}{method}{path}".encode(),
+        padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.DIGEST_LENGTH),
+        hashes.SHA256(),
+    )
+
+
 def test_net_edge_after_taker_fees_positive_only_if_gap_clears_cost():
     # 1¢ theoretical edge should not clear round-trip taker fees near 50¢.
     net = net_edge_after_costs(0.51, 0.50, "yes", 1.0, is_taker=True, assumed_exit_move=0.06)

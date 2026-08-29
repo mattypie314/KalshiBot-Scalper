@@ -14,6 +14,7 @@ from .broker import PaperBroker, Position
 from .config import ASSETS, ScalperConfig
 from .fees import taker_fee
 from .feeds import KalshiFeed, MarketSnap, SpotFeed
+from .kalshi_api import KalshiClient, LiveFill
 from .model import SpotHistory, Tick, VolState, fair_yes, vol_from_closes
 from .risk import RiskState, allow_entry, size_contracts
 from .signals import Signal, evaluate, exit_reason
@@ -38,11 +39,14 @@ class AssetState:
 
 
 class Engine:
-    def __init__(self, cfg: ScalperConfig) -> None:
+    def __init__(self, cfg: ScalperConfig, kalshi_api: KalshiClient | None = None) -> None:
         self.cfg = cfg
         self.spots = SpotFeed()
         self.kalshi = KalshiFeed()
-        self.broker = PaperBroker(cash=cfg.bankroll)
+        self.kalshi_api = kalshi_api if kalshi_api is not None else KalshiClient.from_env()
+        self.paper = PaperBroker(cash=cfg.bankroll)
+        self.live_book: PaperBroker | None = None
+        self.broker = self.paper
         self.risk = RiskState()
         self.assets: dict[str, AssetState] = {a: AssetState(asset=a) for a in ASSETS}
         self.log: deque[dict] = deque(maxlen=250)
@@ -55,8 +59,11 @@ class Engine:
         self.muted: set[str] = set()
         self._lock = threading.Lock()
         self.mode = "PAPER"
-        if cfg.live:
-            self.note("LIVE requested but no Kalshi keys in this environment — staying PAPER", "warn")
+        self.live_error = "" if self.kalshi_api.ready else "Kalshi keys missing. Set KALSHI_API_KEY and KALSHI_PRIVATE_KEY."
+        if cfg.live and not self.kalshi_api.ready:
+            self.note("LIVE requested but no Kalshi keys — staying PAPER. Toggle stays off.", "warn")
+        elif self.kalshi_api.ready:
+            self.note("Kalshi keys loaded. Dashboard can toggle PAPER ↔ LIVE.")
 
     def note(self, msg: str, level: str = "info", **extra: Any) -> None:
         self.log.appendleft({"ts": time.time(), "level": level, "msg": msg, **extra})
@@ -260,12 +267,24 @@ class Engine:
             reason_in=f"{sig.kind}: {sig.reason}",
             kind=sig.kind,
         )
+        if self.mode == "LIVE":
+            live = self._live_enter(pos)
+            if not live.ok:
+                self.risk.last_skipped_ts[st.asset] = now
+                st.skip = live.error or "live order unfilled"
+                self.note(f"LIVE IN failed {st.asset}: {st.skip}", "warn", asset=st.asset)
+                return
+            pos.qty = live.qty
+            pos.entry = live.price
+            pos.fees = live.fee
+            fee = live.fee
         self.broker.buy(pos, is_taker=True, fee=fee, reason=pos.reason_in)
         self.risk.traded_tickers.add(mkt.ticker)
         self.risk.open_count = len(self.broker.positions)
         st.skip = ""
+        tag = "LIVE" if self.mode == "LIVE" else "PAPER"
         self.note(
-            f"IN {st.asset} {sig.side.upper()} x{qty:.0f} @ {sig.take_price:.2f}  "
+            f"IN {tag} {st.asset} {sig.side.upper()} x{pos.qty:.0f} @ {pos.entry:.2f}  "
             f"edge {sig.edge_cents:.3f}  {sig.reason}",
             "trade",
             asset=st.asset,
@@ -283,6 +302,18 @@ class Engine:
             st.skip = "no bid to exit"
             return
         fee = taker_fee(px, pos.qty, self.cfg.fee_multiplier) if taker else 0.0
+        if self.mode == "LIVE":
+            live = self._live_exit(pos, px)
+            if not live.ok:
+                st.skip = live.error or "live exit unfilled"
+                self.note(f"LIVE OUT failed {st.asset}: {st.skip}", "warn", asset=st.asset)
+                return
+            px = live.price
+            fee = live.fee
+            if live.qty + 1e-9 < pos.qty:
+                st.skip = f"live exit partial {live.qty:.0f}/{pos.qty:.0f}"
+                self.note(f"LIVE OUT partial {st.asset}: {st.skip}", "warn", asset=st.asset)
+                return
         rec = self.broker.close(st.asset, px, fee, reason, is_taker=taker)
         self.risk.last_exit_ts[st.asset] = time.time()
         self.risk.open_count = len(self.broker.positions)
@@ -292,6 +323,71 @@ class Engine:
                 "trade",
                 asset=st.asset,
             )
+
+    def _live_enter(self, pos: Position) -> LiveFill:
+        if pos.side == "yes":
+            book_side, yes_px = "bid", pos.entry
+        else:
+            book_side, yes_px = "ask", round(1.0 - pos.entry, 4)
+        fill = self.kalshi_api.ioc(pos.ticker, book_side, pos.qty, yes_px)
+        if fill.ok and pos.side == "no":
+            fill.price = round(1.0 - fill.price, 4)
+        return fill
+
+    def _live_exit(self, pos: Position, side_px: float) -> LiveFill:
+        if pos.side == "yes":
+            book_side, yes_px = "ask", side_px
+        else:
+            book_side, yes_px = "bid", round(1.0 - side_px, 4)
+        fill = self.kalshi_api.ioc(pos.ticker, book_side, pos.qty, yes_px)
+        if fill.ok and pos.side == "no":
+            fill.price = round(1.0 - fill.price, 4)
+        return fill
+
+    def set_mode(self, mode: str, confirm: str = "") -> dict:
+        want = str(mode or "").strip().upper()
+        if want not in {"PAPER", "LIVE"}:
+            return {"ok": False, "error": "mode must be PAPER or LIVE"}
+        if want == self.mode:
+            return {"ok": True, "mode": self.mode, "paused": self.paused}
+        if want == "LIVE":
+            if confirm != "LIVE":
+                return {
+                    "ok": False,
+                    "need_confirm": True,
+                    "error": "type LIVE to confirm real-money mode",
+                    "live_ready": self.kalshi_api.ready,
+                }
+            if not self.kalshi_api.ready:
+                self.live_error = "Kalshi keys missing. Set KALSHI_API_KEY and KALSHI_PRIVATE_KEY."
+                return {"ok": False, "error": self.live_error, "live_ready": False}
+            if self.broker.positions:
+                return {"ok": False, "error": "flatten open positions before switching to LIVE"}
+            try:
+                cash = self.kalshi_api.balance()
+                already = self.kalshi_api.market_position_count()
+            except Exception as e:
+                self.live_error = f"Kalshi auth failed: {e}"
+                return {"ok": False, "error": self.live_error, "live_ready": False}
+            with self._lock:
+                self.live_book = PaperBroker(cash=cash)
+                self.broker = self.live_book
+                self.mode = "LIVE"
+                self.paused = True
+                self.live_error = ""
+                extra = f" Kalshi already has {already} open position(s)." if already else ""
+                self.note(
+                    f"LIVE real-money mode. Cash ${cash:.2f}. Paused — resume to send Kalshi orders.{extra}",
+                    "warn",
+                )
+            return {"ok": True, "mode": "LIVE", "paused": True, "cash": cash}
+        if self.broker.positions:
+            return {"ok": False, "error": "flatten live positions before returning to PAPER"}
+        with self._lock:
+            self.broker = self.paper
+            self.mode = "PAPER"
+            self.note("back to PAPER — no Kalshi orders")
+        return {"ok": True, "mode": "PAPER", "paused": self.paused}
 
     def flatten_now(self, asset: str, reason: str = "flatten from dashboard") -> dict:
         st = self.assets.get(asset)
@@ -311,6 +407,8 @@ class Engine:
     def action(self, payload: dict) -> dict:
         op = str(payload.get("op") or "").strip().lower()
         asset = str(payload.get("asset") or "").strip().upper()
+        if op == "mode":
+            return self.set_mode(str(payload.get("mode") or ""), str(payload.get("confirm") or ""))
         with self._lock:
             if op == "pause":
                 self.paused = True
@@ -455,6 +553,8 @@ class Engine:
             return {
                 "ok": True,
                 "mode": self.mode,
+                "live_ready": self.kalshi_api.ready,
+                "live_error": self.live_error,
                 "paused": self.paused,
                 "muted": sorted(self.muted),
                 "now": now,
