@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import time
 
-from scalper.config import ScalperConfig
+from scalper.config import ASSETS, ScalperConfig, load_config, parse_asset_allowlist
 from scalper.fees import net_edge_after_costs, taker_fee
 from scalper.model import SpotHistory, Tick, fair_yes, norm_cdf, vol_from_closes
 from scalper.risk import RiskState, allow_entry, size_contracts
@@ -490,3 +490,37 @@ def test_net_edge_after_taker_fees_positive_only_if_gap_clears_cost():
     net = net_edge_after_costs(0.51, 0.50, "yes", 1.0, is_taker=True, assumed_exit_move=0.06)
     # May still be slightly positive because assumed exit is +6¢; just sanity-check type.
     assert isinstance(net, float)
+
+
+def test_parse_asset_allowlist():
+    assert list(parse_asset_allowlist("").keys()) == list(ASSETS)
+    assert list(parse_asset_allowlist("   ").keys()) == list(ASSETS)
+    assert list(parse_asset_allowlist("BTC").keys()) == ["BTC"]
+    assert list(parse_asset_allowlist("btc, eth").keys()) == ["BTC", "ETH"]
+    assert list(parse_asset_allowlist("BTC,BTC").keys()) == ["BTC"]
+    try:
+        parse_asset_allowlist("BTC,NOPE")
+    except ValueError as exc:
+        assert "NOPE" in str(exc)
+    else:
+        raise AssertionError("expected unknown asset to raise")
+
+
+def test_load_config_respects_scalper_assets(monkeypatch):
+    monkeypatch.delenv("SCALPER_ASSETS", raising=False)
+    assert "ETH" in load_config().assets
+    monkeypatch.setenv("SCALPER_ASSETS", "BTC")
+    assert list(load_config().assets) == ["BTC"]
+
+
+def test_engine_btc_only_universe():
+    from scalper.engine import Engine
+
+    cfg = ScalperConfig(assets=parse_asset_allowlist("BTC"))
+    eng = Engine(cfg)
+    assert list(eng.assets) == ["BTC"]
+    assert list(eng.spots.assets) == ["BTC"]
+    snap = eng.state()
+    assert snap["universe"] == ["BTC"]
+    assert [c["asset"] for c in snap["cards"]] == ["BTC"]
+    assert eng.action({"op": "mute", "asset": "ETH"}) == {"ok": False, "error": "unknown asset"}

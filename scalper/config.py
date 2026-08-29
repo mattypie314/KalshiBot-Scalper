@@ -118,8 +118,28 @@ class ScalperConfig:
     port: int = int(os.environ.get("SCALPER_PORT", "8787"))
     fee_multiplier: float = 1.0
     maker_fee_multiplier: float = 0.0  # resting crypto 15m is typically maker-free
-    assets: dict = field(default_factory=lambda: ASSETS)
+    assets: dict = field(default_factory=lambda: dict(ASSETS))
+
+
+def parse_asset_allowlist(raw: str | None = None) -> dict:
+    """Subset of ASSETS from SCALPER_ASSETS (comma-separated). Empty means all."""
+    text = (raw if raw is not None else os.environ.get("SCALPER_ASSETS", "")).strip()
+    if not text:
+        return dict(ASSETS)
+    names: list[str] = []
+    for part in text.replace(";", ",").split(","):
+        name = part.strip().upper()
+        if not name:
+            continue
+        if name not in ASSETS:
+            known = ", ".join(ASSETS)
+            raise ValueError(f"unknown SCALPER_ASSETS name {name!r}; known: {known}")
+        if name not in names:
+            names.append(name)
+    if not names:
+        return dict(ASSETS)
+    return {name: ASSETS[name] for name in names}
 
 
 def load_config() -> ScalperConfig:
-    return ScalperConfig()
+    return ScalperConfig(assets=parse_asset_allowlist())

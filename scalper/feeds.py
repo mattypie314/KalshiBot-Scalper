@@ -97,7 +97,8 @@ class MarketSnap:
 
 
 class SpotFeed:
-    def __init__(self) -> None:
+    def __init__(self, assets: dict | None = None) -> None:
+        self.assets = assets if assets is not None else ASSETS
         self._lock = threading.Lock()
         self._spots: dict[str, Spot] = {}
         self._ws_ok = False
@@ -125,7 +126,7 @@ class SpotFeed:
     def poll_rest(self) -> None:
         """Fallback / composite: Coinbase + Kraken + Bitstamp."""
         now = time.time()
-        for asset, meta in ASSETS.items():
+        for asset, meta in self.assets.items():
             sources: dict[str, float] = {}
             bid = ask = px = None
             try:
@@ -173,7 +174,7 @@ class SpotFeed:
                 )
 
     def fetch_candles(self, asset: str, seconds: int = 3600) -> list[float]:
-        meta = ASSETS[asset]
+        meta = self.assets[asset]
         end = int(time.time())
         start = end - seconds
         url = (
@@ -191,8 +192,8 @@ class SpotFeed:
             self._ws_ok = False
             return
 
-        products = [m["coinbase"] for m in ASSETS.values()]
-        prod_to_asset = {m["coinbase"]: a for a, m in ASSETS.items()}
+        products = [m["coinbase"] for m in self.assets.values()]
+        prod_to_asset = {m["coinbase"]: a for a, m in self.assets.items()}
 
         def on_open(ws):
             sub = {

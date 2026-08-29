@@ -11,7 +11,7 @@ from typing import Any
 
 from .book import Book
 from .broker import PaperBroker, Position
-from .config import ASSETS, ScalperConfig
+from .config import ScalperConfig
 from .fees import taker_fee
 from .feeds import KalshiFeed, MarketSnap, SpotFeed
 from .kalshi_api import KalshiClient, LiveFill
@@ -41,14 +41,14 @@ class AssetState:
 class Engine:
     def __init__(self, cfg: ScalperConfig, kalshi_api: KalshiClient | None = None) -> None:
         self.cfg = cfg
-        self.spots = SpotFeed()
+        self.spots = SpotFeed(cfg.assets)
         self.kalshi = KalshiFeed()
         self.kalshi_api = kalshi_api if kalshi_api is not None else KalshiClient.from_env()
         self.paper = PaperBroker(cash=cfg.bankroll)
         self.live_book: PaperBroker | None = None
         self.broker = self.paper
         self.risk = RiskState()
-        self.assets: dict[str, AssetState] = {a: AssetState(asset=a) for a in ASSETS}
+        self.assets: dict[str, AssetState] = {a: AssetState(asset=a) for a in cfg.assets}
         self.log: deque[dict] = deque(maxlen=250)
         self.started = time.time()
         self.tick_n = 0
@@ -71,7 +71,8 @@ class Engine:
     def start(self) -> None:
         self.running = True
         self.spots.start()
-        self.note("Scalper 3000 online. Paper trading. Limits only. 3–5% size. No hope holds.")
+        names = ", ".join(self.cfg.assets)
+        self.note(f"Scalper 3000 online. Markets: {names}. Paper trading. Limits only. 3–5% size. No hope holds.")
         self._refresh_vol()
         self.spots.poll_rest()
 
@@ -108,13 +109,13 @@ class Engine:
 
         snaps = {}
         try:
-            snaps = self.kalshi.snapshot_all(ASSETS)
+            snaps = self.kalshi.snapshot_all(self.cfg.assets)
         except Exception as e:
             self.note(f"kalshi batch: {e}", "error")
 
         with self._lock:
             self.risk.open_count = len(self.broker.positions)
-            for asset, meta in ASSETS.items():
+            for asset, meta in self.cfg.assets.items():
                 st = self.assets[asset]
                 if asset in snaps and snaps[asset]:
                     st.market = snaps[asset]
@@ -576,6 +577,7 @@ class Engine:
                 "fees_paid": self.broker.fees_paid,
                 "open": len(self.broker.positions),
                 "cards": cards,
+                "universe": list(self.cfg.assets),
                 "stats": self._session_stats(),
                 "trades": list(reversed(self.broker.trades[-40:])),
                 "log": list(self.log)[:80],
