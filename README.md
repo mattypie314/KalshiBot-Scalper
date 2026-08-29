@@ -32,15 +32,17 @@ python3 run.py
 
 Dashboard: `http://127.0.0.1:8787`
 
-The dashboard is live and interactive: click a card for the book / venues / sparkline, filter and sort the board, pause new entries, mute an asset, or flatten a paper position. Keyboard: `1–7` select, `P` pause, `M` mute, `F` flatten.
+The dashboard is interactive: click a card for the book / venues / sparkline, filter and sort the board, pause new entries, mute an asset, flatten a position, and toggle **PAPER ↔ LIVE**. Keyboard: `1–7` select, `P` pause, `M` mute, `F` flatten.
 
-This environment has **no Kalshi API keys**, so the engine stays in **PAPER**. It will not place live orders.
+**PAPER** is the default. **LIVE** sends IOC limits to your Kalshi account. The toggle stays locked until `KALSHI_API_KEY` and `KALSHI_PRIVATE_KEY` (or `KALSHI_PRIVATE_KEY_PATH`) are set. Going live asks you to type `LIVE`, then starts **paused** so you have to resume before any real order goes out. Flatten open positions before switching modes.
 
 ```bash
 export SCALPER_BANKROLL=1000
 export SCALPER_PORT=8787
-# live trading is intentionally off without keys
-# export SCALPER_LIVE=1
+# required only for the LIVE toggle
+# export KALSHI_API_KEY="your-key-id"
+# export KALSHI_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----..."
+# optional: export KALSHI_API_BASE=https://external-api.demo.kalshi.co/trade-api/v2
 ```
 
 ## Tests
