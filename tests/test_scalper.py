@@ -362,6 +362,7 @@ def test_action_http_roundtrip():
         with urllib.request.urlopen(head, timeout=3) as resp:
             assert resp.status == 200
             assert resp.headers.get("Content-Type", "").startswith("text/html")
+            assert resp.headers.get("Content-Length") == "0"
             assert resp.read() == b""
         health = urllib.request.Request(f"http://127.0.0.1:{port}/health", method="HEAD")
         with urllib.request.urlopen(health, timeout=3) as resp:
