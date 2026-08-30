@@ -15,7 +15,8 @@ from .broker import PaperBroker, Position
 from .config import ScalperConfig, asset_for_ticker
 from .fees import taker_fee
 from .feeds import KalshiFeed, MarketSnap, SpotFeed
-from .kalshi_api import KalshiClient, LiveFill
+from .envfile import load_dotenv
+from .kalshi_api import KalshiClient, LiveFill, creds_status
 from .model import SpotHistory, Tick, VolState, fair_yes, vol_from_closes
 from .risk import RiskState, allow_entry, size_contracts
 from .signals import Signal, evaluate, exit_reason
@@ -60,7 +61,7 @@ class Engine:
         self.muted: set[str] = set()
         self._lock = threading.Lock()
         self.mode = "PAPER"
-        self.live_error = "" if self.kalshi_api.ready else "Kalshi keys missing. Set KALSHI_API_KEY and KALSHI_PRIVATE_KEY."
+        self.live_error = "" if self.kalshi_api.ready else creds_status()[1]
         self._temp_loose = False
         self._temp_loose_baseline: float | None = None
         self._temp_loose_saved: tuple[float, float] | None = None
@@ -501,8 +502,15 @@ class Engine:
                     "live_ready": self.kalshi_api.ready,
                 }
             if not self.kalshi_api.ready:
-                self.live_error = "Kalshi keys missing. Set KALSHI_API_KEY and KALSHI_PRIVATE_KEY."
-                return {"ok": False, "error": self.live_error, "live_ready": False}
+                load_dotenv()
+                creds, reason = creds_status()
+                if creds:
+                    self.kalshi_api = KalshiClient(
+                        creds, transport=self.kalshi_api.transport, base=self.kalshi_api.base
+                    )
+                else:
+                    self.live_error = reason
+                    return {"ok": False, "error": self.live_error, "live_ready": False}
             if not (self.cfg.dashboard_token or "").strip():
                 self.live_error = (
                     "Set SCALPER_DASHBOARD_TOKEN before LIVE so :8787 cannot be armed by anyone who can reach it."

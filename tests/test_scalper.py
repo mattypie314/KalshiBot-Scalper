@@ -411,10 +411,12 @@ class _FakeKalshi:
         return LiveFill(ok=True, qty=fill, price=yes_price, fee=0.02, order_id="ord1")
 
 
-def test_live_toggle_requires_confirm_and_keys():
+def test_live_toggle_requires_confirm_and_keys(monkeypatch):
     from scalper.engine import Engine
+    from scalper.kalshi_api import KalshiClient
 
-    eng = Engine(ScalperConfig())
+    monkeypatch.setattr("scalper.engine.load_dotenv", lambda *a, **k: None)
+    eng = Engine(ScalperConfig(), kalshi_api=KalshiClient(None))
     snap = eng.state()
     assert snap["mode"] == "PAPER"
     assert snap["live_ready"] is False
@@ -423,8 +425,87 @@ def test_live_toggle_requires_confirm_and_keys():
     assert no_confirm.get("need_confirm") is True
     blocked = eng.action({"op": "mode", "mode": "LIVE", "confirm": "LIVE"})
     assert blocked["ok"] is False
-    assert "keys" in blocked["error"].lower()
+    assert "key" in blocked["error"].lower()
+    assert "BEGIN" not in blocked["error"]
     assert eng.mode == "PAPER"
+
+
+def test_creds_status_explains_missing_pem_path(tmp_path, monkeypatch):
+    from scalper.kalshi_api import creds_status, load_creds
+
+    monkeypatch.delenv("KALSHI_API_KEY", raising=False)
+    monkeypatch.delenv("KALSHI_API_KEY_ID", raising=False)
+    monkeypatch.delenv("KALSHI_ACCESS_KEY", raising=False)
+    monkeypatch.delenv("KALSHI_KEY_ID", raising=False)
+    monkeypatch.delenv("KALSHI_PRIVATE_KEY", raising=False)
+    monkeypatch.delenv("KALSHI_PRIVATE_KEY_PATH", raising=False)
+    creds, err = creds_status()
+    assert creds is None
+    assert load_creds() is None
+    assert "KALSHI_API_KEY" in err
+    assert "BEGIN" not in err
+
+    monkeypatch.setenv("KALSHI_API_KEY", "kid-1")
+    missing = tmp_path / "nope.pem"
+    monkeypatch.setenv("KALSHI_PRIVATE_KEY_PATH", str(missing))
+    creds, err = creds_status()
+    assert creds is None
+    assert "not found" in err.lower()
+    assert "kid-1" not in err
+
+    pem = tmp_path / "ok.pem"
+    pem.write_text("-----BEGIN RSA PRIVATE KEY-----\nMIIB\n-----END RSA PRIVATE KEY-----\n")
+    monkeypatch.setenv("KALSHI_PRIVATE_KEY_PATH", str(pem))
+    creds, err = creds_status()
+    assert creds is not None
+    assert creds.key_id == "kid-1"
+    assert err == ""
+
+
+def test_live_reloads_creds_from_dotenv(tmp_path, monkeypatch):
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from scalper.engine import Engine
+    from scalper.envfile import load_dotenv as real_load
+    from scalper.kalshi_api import KalshiClient
+
+    for k in (
+        "KALSHI_API_KEY",
+        "KALSHI_API_KEY_ID",
+        "KALSHI_ACCESS_KEY",
+        "KALSHI_KEY_ID",
+        "KALSHI_PRIVATE_KEY",
+        "KALSHI_PRIVATE_KEY_PATH",
+    ):
+        monkeypatch.delenv(k, raising=False)
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem_text = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode()
+    pem = tmp_path / "ok.pem"
+    pem.write_text(pem_text)
+    env = tmp_path / ".env"
+    env.write_text(f"KALSHI_API_KEY=kid-reload\nKALSHI_PRIVATE_KEY_PATH={pem}\n")
+    monkeypatch.setattr("scalper.engine.load_dotenv", lambda *a, **k: real_load(env))
+
+    def transport(method, url, headers, body):
+        if "balance" in url:
+            return 200, {"balance_dollars": "12.50"}
+        if "positions" in url:
+            return 200, {"market_positions": []}
+        return 200, {}
+
+    cfg = ScalperConfig()
+    cfg.dashboard_token = "lock"
+    eng = Engine(cfg, kalshi_api=KalshiClient(None, transport=transport))
+    assert eng.state()["live_ready"] is False
+    out = eng.action({"op": "mode", "mode": "LIVE", "confirm": "LIVE"})
+    assert out["ok"] is True
+    assert eng.mode == "LIVE"
+    assert eng.kalshi_api.ready is True
 
 
 def test_live_toggle_with_client_and_orders():

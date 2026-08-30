@@ -38,23 +38,50 @@ class LiveFill:
 Transport = Callable[[str, str, dict[str, str], bytes | None], tuple[int, dict]]
 
 
-def load_creds() -> KalshiCreds | None:
-    key_id = (
+def _key_id_from_env() -> str:
+    return (
         os.environ.get("KALSHI_API_KEY")
         or os.environ.get("KALSHI_API_KEY_ID")
         or os.environ.get("KALSHI_ACCESS_KEY")
         or os.environ.get("KALSHI_KEY_ID")
         or ""
     ).strip()
+
+
+def creds_status() -> tuple[KalshiCreds | None, str]:
+    """Return creds, or a specific reason LIVE cannot arm. Never includes PEM bytes."""
+    key_id = _key_id_from_env()
     pem = (os.environ.get("KALSHI_PRIVATE_KEY") or "").replace("\\n", "\n").strip()
     path = (os.environ.get("KALSHI_PRIVATE_KEY_PATH") or "").strip()
+    pem_file: Path | None = None
     if not pem and path:
-        p = Path(path).expanduser()
-        if p.is_file():
-            pem = p.read_text().strip()
-    if key_id and pem and "BEGIN" in pem:
-        return KalshiCreds(key_id=key_id, private_pem=pem)
-    return None
+        pem_file = Path(path).expanduser()
+        if pem_file.is_file():
+            pem = pem_file.read_text().strip()
+    if not key_id and not pem and not path:
+        return None, (
+            "Kalshi keys missing. On the Pi put KALSHI_API_KEY and "
+            "KALSHI_PRIVATE_KEY_PATH in .env (PEM file on disk, not in chat)."
+        )
+    if not key_id:
+        return None, "KALSHI_API_KEY is empty. That is the Key ID from kalshi.com, not the PEM."
+    if not pem:
+        if pem_file is not None and not pem_file.is_file():
+            return None, f"KALSHI_PRIVATE_KEY_PATH not found: {pem_file}. Copy the .pem onto the Pi."
+        if path:
+            return None, f"PEM at {path} has no key body. Use the RSA file Kalshi downloaded."
+        return None, (
+            "Set KALSHI_PRIVATE_KEY_PATH to a .pem on the Pi. "
+            "A multiline KALSHI_PRIVATE_KEY in .env will not load."
+        )
+    if "BEGIN" not in pem:
+        return None, "Private key is not a PEM (missing BEGIN). Point KALSHI_PRIVATE_KEY_PATH at the .pem file."
+    return KalshiCreds(key_id=key_id, private_pem=pem), ""
+
+
+def load_creds() -> KalshiCreds | None:
+    creds, _reason = creds_status()
+    return creds
 
 
 def sign_request(private_pem: str, timestamp: str, method: str, path: str) -> str:

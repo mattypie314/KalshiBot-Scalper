@@ -57,6 +57,48 @@ export SCALPER_ASSETS=BTC          # default; use ALL or BTC,ETH for more
 
 `python3 run.py` also reads a local `.env` if present (not committed). Use that for demo keys. Leave `KALSHI_API_BASE` unset for real cash.
 
+### LIVE keys on the Pi
+
+The dashboard token unlocks the board. LIVE also needs a **Kalshi API Key ID + RSA PEM** on the Pi. Do not paste the PEM in chat.
+
+On [kalshi.com](https://kalshi.com) (or demo.kalshi.co for play money): Account → API → create a key → download the `.pem`. Copy both onto the Pi:
+
+```bash
+mkdir -p .secrets
+# from your laptop:
+# scp kalshi.pem pi@mattypi:~/KalshiBot-Scalper/.secrets/kalshi_live.pem
+chmod 600 .secrets/kalshi_live.pem
+```
+
+In `.env` (single lines only — a multiline PEM in `.env` will not load):
+
+```bash
+KALSHI_API_KEY=the-key-id-uuid
+KALSHI_PRIVATE_KEY_PATH=/home/mkubit/KalshiBot-Scalper/.secrets/kalshi_live.pem
+# leave KALSHI_API_BASE unset for real cash
+```
+
+Then restart the bot (`systemctl --user restart kalshi-btc-scalper` or Ctrl-C and `python3 run.py`). Safe check (prints yes/no, not the key):
+
+```bash
+cd ~/KalshiBot-Scalper
+python3 - <<'PY'
+import os, sys
+from pathlib import Path
+sys.path.insert(0, str(Path(".").resolve()))
+from scalper.envfile import load_dotenv
+from scalper.kalshi_api import creds_status
+load_dotenv()
+creds, err = creds_status()
+print("ready", bool(creds))
+print("api_key_set", bool((os.environ.get("KALSHI_API_KEY") or "").strip()))
+path = (os.environ.get("KALSHI_PRIVATE_KEY_PATH") or "").strip()
+print("pem_path_set", bool(path))
+print("pem_file_exists", Path(path).expanduser().is_file() if path else False)
+print("error", err or "ok")
+PY
+```
+
 ## Phone
 
 The bot stays on the PC / Pi / VPS. The phone is only the dashboard.
