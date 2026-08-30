@@ -1,0 +1,33 @@
+[Unit]
+Description=Kalshi BTC Scalper 3000 (persistent)
+Documentation=file:///home/mkubit/KalshiBot-Scalper/README.md
+After=network-online.target
+Wants=network-online.target
+# Never give up restarting — API errors / WS timeouts / rate limits must not leave the bot dead.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=/home/mkubit/KalshiBot-Scalper
+ExecStart=/home/mkubit/KalshiBot-Scalper/.venv/bin/python /home/mkubit/KalshiBot-Scalper/run_btc.py
+# Secrets + knobs live in .env (not committed). SCALPER_LIVE forced off so a crash-restart
+# cannot auto-arm real orders; arm LIVE from the dashboard after typing LIVE.
+EnvironmentFile=-/home/mkubit/KalshiBot-Scalper/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=SCALPER_LIVE=0
+Environment=SCALPER_ASSETS=BTC
+Environment=SCALPER_HOST=0.0.0.0
+Environment=SCALPER_PORT=8787
+Restart=always
+# Short delay so a hard kill can release :8787 before rebind (still sub-second).
+RestartSec=250ms
+KillMode=mixed
+TimeoutStopSec=20
+MemoryAccounting=yes
+# Keep stdout/stderr in the journal for post-mortem.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kalshi-btc-scalper
+
+[Install]
+WantedBy=default.target
