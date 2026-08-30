@@ -1,0 +1,17 @@
+[Unit]
+Description=Kalshi BTC Scalper $4 drawdown kill-switch
+After=network-online.target default.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/mkubit/KalshiBot-Scalper
+ExecStart=/home/mkubit/KalshiBot-Scalper/deploy/kill_switch.sh watch
+Restart=on-failure
+RestartSec=2s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kalshi-kill-switch
+
+[Install]
+WantedBy=default.target

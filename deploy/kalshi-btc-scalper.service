@@ -20,6 +20,11 @@ Environment=SCALPER_HOST=0.0.0.0
 Environment=SCALPER_PORT=8787
 Environment=SCALPER_POLL_S=0.2
 Environment=SCALPER_LIVE_CROSS_TICKS=1
+# Temporary looser entries; auto-reverts after $1 equity drawdown.
+Environment=SCALPER_TEMP_LOOSE=1
+Environment=SCALPER_TEMP_SIGMA=0.35
+Environment=SCALPER_TEMP_EDGE=0.025
+Environment=SCALPER_TEMP_LOOSE_LOSS=1.0
 Restart=always
 # Short delay so a hard kill can release :8787 before rebind (still sub-second).
 RestartSec=250ms

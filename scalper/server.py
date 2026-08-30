@@ -53,6 +53,9 @@ class Handler(BaseHTTPRequestHandler):
         if path in {"/", "/index.html"}:
             self._file(WEB / "index.html", "text/html; charset=utf-8", write_body=write_body)
             return
+        if path in {"/roughs", "/roughs/"}:
+            self._file(WEB / "roughs" / "index.html", "text/html; charset=utf-8", write_body=write_body)
+            return
         if path == "/api/state":
             if not self._token_ok():
                 self._json(
@@ -66,6 +69,29 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/health":
             self._json(200, {"ok": True}, write_body=write_body)
             return
+        # Static assets under web/ (dash.js, roughs/*.html). Never escape WEB.
+        if path.startswith("/web/"):
+            path = path[len("/web") :]
+        rel = path.lstrip("/")
+        if rel and ".." not in rel.split("/") and not rel.startswith("."):
+            candidate = (WEB / rel).resolve()
+            try:
+                candidate.relative_to(WEB.resolve())
+            except ValueError:
+                self.send_error(404)
+                return
+            if candidate.is_file():
+                ctype = "application/octet-stream"
+                if candidate.suffix == ".html":
+                    ctype = "text/html; charset=utf-8"
+                elif candidate.suffix == ".js":
+                    ctype = "application/javascript; charset=utf-8"
+                elif candidate.suffix == ".css":
+                    ctype = "text/css; charset=utf-8"
+                elif candidate.suffix == ".svg":
+                    ctype = "image/svg+xml"
+                self._file(candidate, ctype, write_body=write_body)
+                return
         self.send_error(404)
 
     def do_POST(self) -> None:  # noqa: N802

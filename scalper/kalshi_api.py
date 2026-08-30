@@ -211,7 +211,10 @@ class KalshiClient:
         }
         code, data = self.request("POST", "/portfolio/events/orders", body)
         if code >= 400:
-            return LiveFill(ok=False, error=str(data.get("message") or data.get("error") or f"order HTTP {code}"))
+            nested = ""
+            if isinstance(data.get("error"), dict):
+                nested = str(data["error"].get("message") or data["error"].get("code") or "")
+            return LiveFill(ok=False, error=str(nested or data.get("message") or data.get("error") or f"order HTTP {code}"))
         filled = _f(data.get("fill_count"))
         remaining = _f(data.get("remaining_count"))
         avg = _f(data.get("average_fill_price"), yes_price if filled else 0.0)

@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rough 03 · Signal Stage</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #080706;
+      --bg2: #0f0d0a;
+      --panel: #12100c;
+      --line: rgba(255,200,100,.08);
+      --text: #f5efe4;
+      --dim: #8a7d6a;
+      --yes: #6dd68a;
+      --no: #e07060;
+      --amber: #f0a030;
+      --spotlight: rgba(240,160,48,.18);
+      --radius: 4px;
+      --mono: "Space Grotesk", ui-sans-serif, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; min-height: 100%;
+      background:
+        radial-gradient(ellipse 70% 45% at 50% 0%, var(--spotlight) 0%, transparent 65%),
+        radial-gradient(ellipse 40% 30% at 80% 20%, rgba(240,120,30,.06) 0%, transparent 50%),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 14px;
+      letter-spacing: -.01em;
+    }
+    button {
+      font-family: inherit; font-size: 10px; font-weight: 600; cursor: pointer;
+      background: transparent; color: var(--dim); border: 1px solid rgba(255,255,255,.06);
+      border-radius: 3px; padding: 5px 10px; transition: .12s ease; letter-spacing: .06em; text-transform: uppercase;
+    }
+    button:hover { color: var(--text); border-color: rgba(255,255,255,.14); }
+    button.yes { color: var(--yes); border-color: rgba(109,214,138,.3); }
+    button.warn { color: var(--amber); border-color: rgba(240,160,48,.3); }
+    button.danger { color: var(--no); border-color: rgba(224,112,96,.3); }
+    button.on, button.active { background: rgba(240,160,48,.12); color: var(--amber); border-color: rgba(240,160,48,.4); }
+    header {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+      padding: 16px 24px 10px; position: sticky; top: 0; z-index: 3;
+      backdrop-filter: blur(12px); background: rgba(8,7,6,.88);
+      border-bottom: 1px solid var(--line);
+    }
+    .logo { font-weight: 700; letter-spacing: .18em; font-size: 11px; text-transform: uppercase; color: var(--amber); }
+    .logo em { font-style: normal; color: var(--text); }
+    .mode-toggle { display: flex; gap: 4px; align-items: center; }
+    #dashToken {
+      width: 100px; background: var(--panel); color: var(--text); border: 1px solid var(--line);
+      border-radius: 3px; padding: 6px 10px; font-family: inherit; font-size: 11px;
+    }
+    .pill {
+      font-size: 10px; font-weight: 600; padding: 4px 8px; border-radius: 3px;
+      background: rgba(255,255,255,.03); color: var(--dim); letter-spacing: .08em;
+    }
+    .pill.live { color: var(--yes); background: rgba(109,214,138,.08); }
+    .pill.warn { color: var(--amber); background: rgba(240,160,48,.1); }
+    .pill.real { color: var(--no); background: rgba(224,112,96,.1); }
+    .stats { display: flex; flex-wrap: wrap; gap: 14px; margin-left: auto; font-size: 11px; color: var(--dim); align-items: center; }
+    .stats b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .up { color: var(--yes); } .dn { color: var(--no); } .flat { color: var(--dim); }
+    #pnlBox {
+      display: inline-flex; align-items: baseline; gap: 6px;
+      padding: 5px 10px; border-radius: 3px; font-weight: 700;
+      background: rgba(240,160,48,.06); border: 1px solid rgba(240,160,48,.15);
+    }
+    #pnlBox.up { color: var(--yes); background: rgba(109,214,138,.08); border-color: rgba(109,214,138,.2); }
+    #pnlBox.dn { color: var(--no); background: rgba(224,112,96,.08); border-color: rgba(224,112,96,.2); }
+    #pnlBox .dir { font-size: 9px; letter-spacing: .16em; opacity: .7; }
+    #pnlBox #pnl { font-size: 16px; font-variant-numeric: tabular-nums; }
+    main { padding: 16px 24px 56px; display: grid; gap: 14px; max-width: 1200px; margin: 0 auto; }
+    .markets, .toolbar, .tune { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .markets { padding-bottom: 2px; }
+    .markets h2, h2 { margin: 0; font-size: 9px; letter-spacing: .2em; color: var(--dim); font-weight: 600; }
+    .mrail { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+    .mkt {
+      display: flex; align-items: center; gap: 6px; padding: 4px 8px 4px 10px;
+      background: var(--panel); border-radius: 3px; border: 1px solid var(--line);
+    }
+    .mkt .nm { font-weight: 600; font-size: 11px; letter-spacing: .04em; }
+    .mkt.off { opacity: .35; }
+    .sw { font-size: 9px; padding: 3px 8px; min-width: 36px; border-radius: 3px; color: var(--dim); }
+    .sw.on { color: var(--amber); border-color: rgba(240,160,48,.35); }
+    .toolbar .hint, .tune .hint { margin-left: auto; color: var(--dim); font-size: 10px; }
+    .tune .meter {
+      display: inline-flex; align-items: center; gap: 2px;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 3px; padding: 2px;
+    }
+    .tune .meter .lab { color: var(--dim); font-size: 9px; padding: 0 4px; letter-spacing: .1em; }
+    .tune .meter .val { min-width: 40px; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; font-size: 12px; }
+    .tune .meter button { min-width: 28px; padding: 2px 0; border: none; border-radius: 2px; font-size: 14px; }
+    main > .toolbar { opacity: .65; font-size: 10px; }
+    main > .toolbar button { font-size: 9px; padding: 4px 8px; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+    .card {
+      background: linear-gradient(180deg, rgba(240,160,48,.04) 0%, var(--panel) 40%);
+      border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px 24px;
+      position: relative; overflow: hidden;
+    }
+    .card::before {
+      content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: 60%; height: 120px; background: radial-gradient(ellipse, var(--spotlight) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    article.card { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+    article.card:hover { border-color: rgba(240,160,48,.25); }
+    article.card.hot { border-color: rgba(240,160,48,.5); box-shadow: 0 0 60px rgba(240,160,48,.08); }
+    article.card.in { border-color: rgba(240,160,48,.35); }
+    article.card.off { opacity: .4; }
+    article.card.sel { border-color: rgba(240,160,48,.6); box-shadow: 0 0 80px rgba(240,160,48,.1); }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; position: relative; }
+    .asset { font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--amber); }
+    .clock { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .spot {
+      font-size: 56px; margin: 20px 0 8px; font-weight: 700; font-variant-numeric: tabular-nums;
+      letter-spacing: -.04em; line-height: 1; text-align: center; position: relative;
+      text-shadow: 0 0 80px rgba(240,160,48,.25);
+    }
+    .sub { color: var(--dim); font-size: 11px; text-align: center; display: block; }
+    .quotes {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin: 28px 0 12px; position: relative;
+    }
+    .q {
+      padding: 24px 20px; background: rgba(0,0,0,.35); border-radius: var(--radius);
+      border: 1px solid rgba(240,160,48,.12); text-align: center;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    .q .k { color: var(--dim); font-size: 10px; letter-spacing: .18em; font-weight: 600; text-transform: uppercase; }
+    .q .v { font-size: 32px; margin-top: 10px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
+    .sig { font-size: 14px; color: var(--dim); margin-top: 16px; line-height: 1.45; text-align: center; }
+    .sig.edge { color: var(--amber); font-weight: 600; }
+    .depth { display: flex; gap: 20px; font-size: 11px; color: var(--dim); margin-top: 12px; justify-content: center; }
+    .pos {
+      margin-top: 16px; font-size: 13px; color: var(--amber); padding: 12px 16px;
+      background: rgba(240,160,48,.08); border-radius: var(--radius); border: 1px solid rgba(240,160,48,.15);
+      text-align: center;
+    }
+    .acts { display: flex; gap: 8px; margin-top: 14px; align-items: center; justify-content: center; flex-wrap: wrap; }
+    .detail { display: grid; grid-template-columns: 1.1fr 1fr .9fr; gap: 12px; }
+    .bottom { display: grid; grid-template-columns: 1.2fr .8fr; gap: 12px; }
+    @media (max-width: 900px) {
+      .detail, .bottom { grid-template-columns: 1fr; }
+      .stats { margin-left: 0; }
+      .spot { font-size: 44px; }
+      .q .v { font-size: 26px; }
+      .quotes { grid-template-columns: 1fr; }
+      header, main { padding-left: 16px; padding-right: 16px; }
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    th { text-align: left; color: var(--dim); font-weight: 500; padding: 6px 4px; border-bottom: 1px solid var(--line); letter-spacing: .06em; }
+    td { padding: 8px 4px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+    tr.click { cursor: pointer; }
+    tr.click:hover td { background: rgba(240,160,48,.04); }
+    .log { max-height: 180px; overflow: auto; font-size: 11px; line-height: 1.5; color: var(--dim); }
+    .log .trade { color: var(--text); } .log .warn { color: var(--amber); } .log .error { color: var(--no); }
+    .log-body[hidden], .log-filters[hidden] { display: none !important; }
+    .rules { color: var(--dim); font-size: 11px; line-height: 1.5; margin: 0; padding-left: 18px; }
+    #rulesEdit {
+      width: 100%; min-height: 120px; background: rgba(0,0,0,.35); color: var(--text);
+      border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; font-family: inherit; font-size: 11px; resize: vertical; margin-top: 8px;
+    }
+    #rulesEdit[hidden] { display: none; }
+    .rules-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+    .ladder { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 11px; }
+    .lvl { display: flex; justify-content: space-between; gap: 8px; margin: 2px 0; font-variant-numeric: tabular-nums; }
+    .src { display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px; }
+    .src span { border: 1px solid var(--line); padding: 4px 10px; border-radius: 3px; background: rgba(0,0,0,.25); }
+    .empty { color: var(--dim); }
+    .modal-back { position: fixed; inset: 0; background: rgba(0,0,0,.82); z-index: 20; display: grid; place-items: center; padding: 20px; }
+    .modal-back[hidden] { display: none !important; }
+    .modal {
+      width: min(420px, 100%); background: var(--panel); border: 1px solid rgba(240,160,48,.2);
+      border-radius: var(--radius); padding: 22px; box-shadow: 0 24px 80px rgba(0,0,0,.5), 0 0 60px rgba(240,160,48,.06);
+    }
+    .modal h2 { color: var(--no); margin: 0 0 8px; letter-spacing: .12em; font-size: 11px; }
+    .modal p { color: var(--text); font-size: 14px; line-height: 1.45; margin: 0 0 12px; }
+    .modal input {
+      width: 100%; background: rgba(0,0,0,.4); color: var(--text); border: 1px solid var(--line);
+      border-radius: var(--radius); padding: 10px 12px; font-family: inherit; font-size: 14px; margin-bottom: 10px;
+    }
+    .rough-tag {
+      position: fixed; bottom: 16px; right: 16px; z-index: 5;
+      font-size: 10px; color: var(--dim); background: rgba(8,7,6,.85);
+      border: 1px solid var(--line); border-radius: 3px; padding: 6px 12px; letter-spacing: .04em;
+    }
+    .rough-tag a { color: var(--amber); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">SCALPER <em>3000</em></div>
+    <div class="mode-toggle">
+      <button id="btnPaper" type="button">PAPER</button>
+      <button id="btnLive" type="button" class="danger">LIVE</button>
+      <input id="dashToken" type="password" autocomplete="off" spellcheck="false" placeholder="token" hidden />
+    </div>
+    <div class="pill" id="lock">OPEN</div>
+    <div class="pill" id="mode">PAPER</div>
+    <div class="pill" id="feed">FEED …</div>
+    <div class="pill" id="armed">ARMED</div>
+    <div class="pill" id="loosePill" hidden>LOOSE</div>
+    <button id="btnPause" type="button">PAUSE</button>
+    <div class="stats">
+      <div>EQ <b id="eq">—</b></div>
+      <div>CASH <b id="cash">—</b></div>
+      <div id="pnlBox" class="flat" title="session realized PnL">
+        <span class="dir" id="pnlDir">FLAT</span>
+        <b id="pnl">$0.00</b>
+      </div>
+      <div>FEES <b id="fees">—</b></div>
+      <div>OPEN <b id="open">0</b></div>
+      <div>W/L <b id="wl">0/0</b></div>
+      <div>UP <b id="up">0:00</b></div>
+      <div>T <b id="tick">0</b></div>
+    </div>
+  </header>
+  <main>
+    <section class="markets">
+      <h2>MKTS</h2>
+      <div class="mrail" id="markets"></div>
+      <div class="toolbar">
+        <button type="button" id="btnAllOn">ALL ON</button>
+        <button type="button" id="btnAllOff">ALL OFF</button>
+      </div>
+    </section>
+    <section class="tune" id="tuneBar">
+      <span class="sub">ENTRY</span>
+      <div class="meter">
+        <span class="lab">σ</span>
+        <button type="button" data-tune="sigma" data-dir="-1">−</button>
+        <span class="val" id="tuneSigma">0.55</span>
+        <button type="button" data-tune="sigma" data-dir="1">+</button>
+      </div>
+      <div class="meter">
+        <span class="lab">EDGE</span>
+        <button type="button" data-tune="edge" data-dir="-1">−</button>
+        <span class="val" id="tuneEdge">0.040</span>
+        <button type="button" data-tune="edge" data-dir="1">+</button>
+      </div>
+      <button type="button" id="btnTuneReset">RESET</button>
+      <span class="hint" id="tuneHint">− easier · + pickier</span>
+    </section>
+    <section class="toolbar">
+      <button type="button" data-filter="all" class="active">ALL</button>
+      <button type="button" data-filter="edge">EDGE</button>
+      <button type="button" data-filter="in">IN</button>
+      <button type="button" data-filter="watch">WATCH</button>
+      <button type="button" data-filter="muted">OFF</button>
+      <span class="sub">sort</span>
+      <button type="button" data-sort="name" class="active">NAME</button>
+      <button type="button" data-sort="edge">EDGE</button>
+      <button type="button" data-sort="clock">CLOCK</button>
+      <button type="button" data-sort="spread">SPREAD</button>
+      <div class="hint">1–7 · P pause · F flatten</div>
+    </section>
+    <section class="grid" id="cards"></section>
+    <section class="detail" id="detail" hidden></section>
+    <section class="bottom">
+      <div class="card">
+        <div class="row">
+          <h2>LOG</h2>
+          <div class="toolbar">
+            <div class="toolbar log-filters" id="tapeFilters">
+              <button type="button" data-tape="all" class="active">ALL</button>
+              <button type="button" data-tape="trade">TRADES</button>
+              <button type="button" data-tape="warn">WARN</button>
+            </div>
+            <button type="button" id="btnLogToggle">HIDE</button>
+          </div>
+        </div>
+        <div class="log-body" id="logBody"><div class="log" id="log"></div></div>
+      </div>
+      <div class="card">
+        <h2>FILLS</h2>
+        <div style="overflow:auto">
+          <table>
+            <thead><tr><th>asset</th><th>side</th><th>qty</th><th>in</th><th>out</th><th>hold</th><th>pnl</th><th>why</th></tr></thead>
+            <tbody id="fills"></tbody>
+          </table>
+        </div>
+        <div class="row" style="margin-top:14px">
+          <h2 style="margin:0">RULES</h2>
+          <div class="rules-acts">
+            <button type="button" id="btnRulesEdit">EDIT</button>
+            <button type="button" id="btnRulesSave" hidden>SAVE</button>
+            <button type="button" id="btnRulesCancel" hidden>CANCEL</button>
+            <button type="button" id="btnRulesReset">RESET</button>
+          </div>
+        </div>
+        <ul class="rules" id="rulesList"></ul>
+        <textarea id="rulesEdit" hidden spellcheck="false" placeholder="one rule per line"></textarea>
+      </div>
+    </section>
+  </main>
+  <div class="modal-back" id="modeModal" hidden>
+    <div class="modal">
+      <h2>REAL MONEY</h2>
+      <p id="modeModalMsg">This sends limit IOCs to your Kalshi account. Type LIVE to confirm.</p>
+      <input id="modeConfirm" autocomplete="off" spellcheck="false" placeholder="type LIVE" />
+      <input id="modeToken" type="password" autocomplete="off" spellcheck="false" placeholder="dashboard token" hidden />
+      <div class="acts">
+        <button type="button" class="danger" id="modeGo">GO LIVE</button>
+        <button type="button" id="modeCancel">CANCEL</button>
+      </div>
+    </div>
+  </div>
+  <div class="rough-tag">Rough 03 · Signal Stage · <a href="/">live</a> · <a href="/roughs/">gallery</a></div>
+  <script src="/dash.js"></script>
+</body>
+</html>

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import threading
 import traceback
 import time
@@ -60,6 +61,12 @@ class Engine:
         self._lock = threading.Lock()
         self.mode = "PAPER"
         self.live_error = "" if self.kalshi_api.ready else "Kalshi keys missing. Set KALSHI_API_KEY and KALSHI_PRIVATE_KEY."
+        self._temp_loose = False
+        self._temp_loose_baseline: float | None = None
+        self._temp_loose_saved: tuple[float, float] | None = None
+        self._temp_loose_loss = float(os.environ.get("SCALPER_TEMP_LOOSE_LOSS", "1.0"))
+        self._factory_sigma = float(cfg.min_spot_move_sigma)
+        self._factory_edge = float(cfg.min_net_edge)
         if cfg.live and not self.kalshi_api.ready:
             self.note("LIVE requested but no Kalshi keys — staying PAPER. Toggle stays off.", "warn")
         elif self.kalshi_api.ready and not (cfg.dashboard_token or "").strip():
@@ -70,13 +77,67 @@ class Engine:
     def note(self, msg: str, level: str = "info", **extra: Any) -> None:
         self.log.appendleft({"ts": time.time(), "level": level, "msg": msg, **extra})
 
+    def _arm_temp_loose(self) -> None:
+        """Loosen entry gates until equity drops by SCALPER_TEMP_LOOSE_LOSS dollars."""
+        if self._temp_loose or self._temp_loose_saved is not None:
+            return
+        flag = os.environ.get("SCALPER_TEMP_LOOSE", "0").strip().lower()
+        if flag not in {"1", "true", "yes", "on"}:
+            return
+        sigma = float(os.environ.get("SCALPER_TEMP_SIGMA", "0.35"))
+        edge = float(os.environ.get("SCALPER_TEMP_EDGE", "0.025"))
+        self._temp_loose_saved = (self.cfg.min_spot_move_sigma, self.cfg.min_net_edge)
+        self.cfg.min_spot_move_sigma = sigma
+        self.cfg.min_net_edge = edge
+        self._temp_loose = True
+        self._temp_loose_baseline = self._equity()
+        self.note(
+            f"TEMP LOOSE ON: sigma {self._temp_loose_saved[0]:.2f}→{sigma:.2f}, "
+            f"edge {self._temp_loose_saved[1]:.3f}→{edge:.3f}. "
+            f"Reverts after ${self._temp_loose_loss:.2f} equity drawdown "
+            f"(baseline ${self._temp_loose_baseline:.2f}).",
+            "warn",
+        )
+
+    def _rebaseline_temp_loose(self) -> None:
+        if self._temp_loose:
+            self._temp_loose_baseline = self._equity()
+            self.note(
+                f"TEMP LOOSE baseline reset to equity ${self._temp_loose_baseline:.2f}",
+                "warn",
+            )
+
+    def _check_temp_loose_revert(self) -> None:
+        if not self._temp_loose or self._temp_loose_baseline is None or not self._temp_loose_saved:
+            return
+        eq = self._equity()
+        loss = self._temp_loose_baseline - eq
+        if loss < self._temp_loose_loss - 1e-9:
+            return
+        old_s, old_e = self._temp_loose_saved
+        self.cfg.min_spot_move_sigma = old_s
+        self.cfg.min_net_edge = old_e
+        self._temp_loose = False
+        self.note(
+            f"TEMP LOOSE OFF: lost ${loss:.2f} (limit ${self._temp_loose_loss:.2f}). "
+            f"Restored sigma={old_s:.2f} edge={old_e:.3f}.",
+            "warn",
+        )
+
     def start(self) -> None:
         self.running = True
         self.spots.start()
         names = ", ".join(self.cfg.assets)
         self.note(f"Scalper 3000 online. Markets: {names}. Paper trading. Limits only. 3–5% size. No hope holds.")
-        self._refresh_vol()
-        self.spots.poll_rest()
+        self._arm_temp_loose()
+        try:
+            self._refresh_vol()
+        except Exception as e:
+            self.note(f"vol warmup: {e}", "warn")
+        try:
+            self.spots.poll_rest()
+        except Exception as e:
+            self.note(f"spot warmup: {e}", "warn")
 
     def stop(self) -> None:
         self.running = False
@@ -127,6 +188,7 @@ class Engine:
                     st.last_error = str(e)
                     if self.tick_n % 20 == 0:
                         self.note(f"{asset} error: {e}", "error")
+            self._check_temp_loose_revert()
 
     def _step_asset(self, st: AssetState, meta: dict, now: float) -> None:
         spot_obj = self.spots.get(st.asset)
@@ -293,7 +355,44 @@ class Engine:
             asset=st.asset,
         )
 
+    def _reconcile_ghost(self, asset: str) -> bool:
+        """Drop a LIVE local position that Kalshi no longer holds (settled/closed)."""
+        if self.mode != "LIVE":
+            return False
+        pos = self.broker.positions.get(asset)
+        if not pos or not pos.ticker:
+            return False
+        try:
+            rows = self.kalshi_api.open_positions()
+        except Exception:
+            return False
+        live_qty = 0.0
+        for row in rows:
+            if str(row.get("ticker") or "") != pos.ticker:
+                continue
+            if str(row.get("side") or "") != pos.side:
+                continue
+            live_qty += float(row.get("qty") or 0)
+        if live_qty >= 1:
+            return False
+        del self.broker.positions[asset]
+        self.risk.open_count = len(self.broker.positions)
+        st = self.assets.get(asset)
+        if st:
+            st.skip = "ghost dropped — not on Kalshi"
+        self.note(
+            f"dropped ghost {asset} {pos.side.upper()} x{pos.qty:.0f} on {pos.ticker} — not on Kalshi (settled/closed)",
+            "warn",
+            asset=asset,
+        )
+        return True
+
     def _flatten(self, st: AssetState, reason: str, mkt: MarketSnap, taker: bool) -> None:
+        pos = self.broker.positions.get(st.asset)
+        if not pos:
+            return
+        if self._reconcile_ghost(st.asset):
+            return
         pos = self.broker.positions.get(st.asset)
         if not pos:
             return
@@ -307,6 +406,8 @@ class Engine:
         else:
             px = round(1.0 - quote.yes_ask, 4)
         if px <= 0:
+            if self._reconcile_ghost(st.asset):
+                return
             st.skip = "no bid to exit"
             return
         fee = taker_fee(px, pos.qty, self.cfg.fee_multiplier) if taker else 0.0
@@ -315,6 +416,8 @@ class Engine:
             live = self._live_exit(pos, px)
             filled = live.qty
             if filled < 1:
+                if self._reconcile_ghost(st.asset):
+                    return
                 st.skip = live.error or "live exit unfilled"
                 self.note(f"LIVE OUT failed {st.asset}: {st.skip}", "warn", asset=st.asset)
                 return
@@ -453,6 +556,7 @@ class Engine:
                     f"LIVE real-money mode. Cash ${cash:.2f}. Paused — resume to send Kalshi orders.{extra}",
                     "warn",
                 )
+            self._rebaseline_temp_loose()
             return {
                 "ok": True,
                 "mode": "LIVE",
@@ -483,6 +587,58 @@ class Engine:
         if before and still:
             return {"ok": False, "error": st.skip or "could not flatten"}
         return {"ok": True, "asset": asset}
+
+    def tune_entry(self, field: str, delta: float | None = None, direction: int | None = None) -> dict:
+        """Live-adjust entry gates. Manual tune cancels TEMP LOOSE auto-revert."""
+        key = str(field or "").strip().lower()
+        if key in {"sigma", "min_spot_move_sigma", "spot_sigma"}:
+            step = 0.05 if direction is not None else 0.0
+            d = float(delta) if delta is not None else (step * (1 if (direction or 0) >= 0 else -1))
+            lo, hi = 0.15, 1.50
+            cur = float(self.cfg.min_spot_move_sigma)
+            nxt = min(hi, max(lo, round(cur + d, 4)))
+            self.cfg.min_spot_move_sigma = nxt
+            label = "sigma"
+        elif key in {"edge", "min_net_edge", "net_edge"}:
+            step = 0.005 if direction is not None else 0.0
+            d = float(delta) if delta is not None else (step * (1 if (direction or 0) >= 0 else -1))
+            lo, hi = 0.01, 0.12
+            cur = float(self.cfg.min_net_edge)
+            nxt = min(hi, max(lo, round(cur + d, 4)))
+            self.cfg.min_net_edge = nxt
+            label = "edge"
+        elif key in {"reset", "factory"}:
+            self.cfg.min_spot_move_sigma = self._factory_sigma
+            self.cfg.min_net_edge = self._factory_edge
+            self._cancel_temp_loose("manual RESET to factory gates")
+            self.note(
+                f"ENTRY RESET: sigma={self.cfg.min_spot_move_sigma:.2f} edge={self.cfg.min_net_edge:.3f}",
+                "warn",
+            )
+            return {
+                "ok": True,
+                "min_spot_move_sigma": self.cfg.min_spot_move_sigma,
+                "min_net_edge": self.cfg.min_net_edge,
+                "temp_loose": self._temp_loose,
+            }
+        else:
+            return {"ok": False, "error": "field must be sigma, edge, or reset"}
+        if self._temp_loose:
+            self._cancel_temp_loose(f"manual {label} tune")
+        self.note(f"ENTRY {label} {cur:.4f} → {nxt:.4f}", "warn")
+        return {
+            "ok": True,
+            "field": label,
+            "min_spot_move_sigma": self.cfg.min_spot_move_sigma,
+            "min_net_edge": self.cfg.min_net_edge,
+            "temp_loose": self._temp_loose,
+        }
+
+    def _cancel_temp_loose(self, why: str) -> None:
+        if not self._temp_loose:
+            return
+        self._temp_loose = False
+        self.note(f"TEMP LOOSE cancelled ({why}). Gates stay at current values.", "warn")
 
     def action(self, payload: dict) -> dict:
         op = str(payload.get("op") or "").strip().lower()
@@ -520,6 +676,20 @@ class Engine:
                 if asset not in self.assets:
                     return {"ok": False, "error": "unknown asset"}
                 return self.flatten_now(asset)
+            if op == "tune":
+                direction = payload.get("dir")
+                if direction is not None:
+                    try:
+                        direction = int(direction)
+                    except (TypeError, ValueError):
+                        return {"ok": False, "error": "dir must be +1 or -1"}
+                delta = payload.get("delta")
+                if delta is not None:
+                    try:
+                        delta = float(delta)
+                    except (TypeError, ValueError):
+                        return {"ok": False, "error": "delta must be a number"}
+                return self.tune_entry(str(payload.get("field") or ""), delta=delta, direction=direction)
             return {"ok": False, "error": f"unknown op {op!r}"}
 
     def _equity(self) -> float:
@@ -627,6 +797,7 @@ class Engine:
                             "side": pos.side,
                             "qty": pos.qty,
                             "entry": pos.entry,
+                            "ticker": pos.ticker,
                             "held_s": now - pos.entry_ts,
                             "target": pos.target,
                             "reason_in": pos.reason_in,
@@ -656,6 +827,13 @@ class Engine:
                 "realized": self.broker.realized,
                 "fees_paid": self.broker.fees_paid,
                 "open": len(self.broker.positions),
+                "temp_loose": self._temp_loose,
+                "temp_loose_baseline": self._temp_loose_baseline,
+                "temp_loose_loss": self._temp_loose_loss,
+                "min_spot_move_sigma": self.cfg.min_spot_move_sigma,
+                "min_net_edge": self.cfg.min_net_edge,
+                "factory_sigma": self._factory_sigma,
+                "factory_edge": self._factory_edge,
                 "cards": cards,
                 "universe": list(self.cfg.assets),
                 "stats": self._session_stats(),

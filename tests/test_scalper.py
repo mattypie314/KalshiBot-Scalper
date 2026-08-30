@@ -378,7 +378,7 @@ class _FakeKalshi:
         self.ready = True
         self.cash = 250.0
         self.orders = []
-        self.fill_qty = 5.0
+        self.fills_qty = 5.0
         self.fail_balance = False
         self.positions = []
 
@@ -396,7 +396,7 @@ class _FakeKalshi:
     def ioc(self, ticker, book_side, qty, yes_price, reduce_only=False):
         from scalper.kalshi_api import LiveFill
 
-        fill = min(self.fill_qty, qty) if self.fill_qty >= 1 else 0.0
+        fill = min(self.fills_qty, qty) if self.fills_qty >= 1 else 0.0
         self.orders.append(
             {
                 "ticker": ticker,
@@ -468,10 +468,10 @@ def test_live_toggle_with_client_and_orders():
     assert fill_flat.ok is True
     assert api.orders[-1]["px"] == 0.42
 
-    api.fill_qty = 0
+    api.fills_qty = 0
     miss = eng._live_enter(pos)
     assert miss.ok is False
-    api.fill_qty = 5
+    api.fills_qty = 5
 
     stuck = eng.action({"op": "mode", "mode": "PAPER"})
     # no live positions yet
@@ -485,6 +485,27 @@ def test_live_toggle_with_client_and_orders():
     eng.action({"op": "mode", "mode": "PAPER"})
     eng.broker.positions["BTC"] = pos
     assert "flatten" in eng.action({"op": "mode", "mode": "LIVE", "confirm": "LIVE"})["error"]
+
+
+def test_tune_entry_meters():
+    from scalper.engine import Engine
+
+    eng = Engine(ScalperConfig())
+    assert abs(eng.cfg.min_spot_move_sigma - 0.55) < 1e-9
+    assert abs(eng.cfg.min_net_edge - 0.04) < 1e-9
+    down = eng.action({"op": "tune", "field": "sigma", "dir": -1})
+    assert down["ok"] is True
+    assert abs(down["min_spot_move_sigma"] - 0.50) < 1e-9
+    up = eng.action({"op": "tune", "field": "edge", "dir": 1})
+    assert up["ok"] is True
+    assert abs(up["min_net_edge"] - 0.045) < 1e-9
+    reset = eng.action({"op": "tune", "field": "reset"})
+    assert reset["ok"] is True
+    assert abs(reset["min_spot_move_sigma"] - 0.55) < 1e-9
+    assert abs(reset["min_net_edge"] - 0.04) < 1e-9
+    snap = eng.state()
+    assert "min_spot_move_sigma" in snap
+    assert "factory_sigma" in snap
 
 
 def test_sign_request_roundtrip():
@@ -553,7 +574,12 @@ def test_live_exit_partial_keeps_remainder_and_reduce_only():
     from scalper.broker import Position
     from scalper.engine import Engine
 
-    api = _FakeKalshi()
+    class PartialFake(_FakeKalshi):
+        def __init__(self):
+            super().__init__()
+            self.fills_qty = 2.0
+
+    api = PartialFake()
     cfg = ScalperConfig()
     cfg.dashboard_token = "secret"
     eng = Engine(cfg, kalshi_api=api)
@@ -565,7 +591,11 @@ def test_live_exit_partial_keeps_remainder_and_reduce_only():
         asset="BTC", ticker=st.market.ticker, side="yes", qty=5, entry=0.40,
         entry_ts=now - 8, fees=0.05, target=0.06, reason_in="t", kind="lag_yes",
     )
-    api.fill_qty = 2
+    # Keep Kalshi inventory in sync so ghost-reconcile does not drop the live clip.
+    api.positions = [
+        {"ticker": st.market.ticker, "side": "yes", "qty": 5, "entry": 0.40, "fees": 0.05},
+    ]
+    assert api.fills_qty == 2.0
     out = eng.flatten_now("BTC")
     assert out["ok"] is False
     assert "partial" in (out["error"] or "").lower() or "partial" in st.skip
@@ -574,6 +604,27 @@ def test_live_exit_partial_keeps_remainder_and_reduce_only():
     assert eng.broker.trades[-1]["partial"] is True
     assert api.orders[-1]["reduce_only"] is True
     assert api.orders[-1]["side"] == "ask"
+
+
+def test_reconcile_drops_ghost_not_on_kalshi():
+    from scalper.broker import Position
+    from scalper.engine import Engine
+
+    api = _FakeKalshi()
+    cfg = ScalperConfig()
+    cfg.dashboard_token = "secret"
+    eng = Engine(cfg, kalshi_api=api)
+    assert eng.action({"op": "mode", "mode": "LIVE", "confirm": "LIVE"})["ok"] is True
+    st = eng.assets["BTC"]
+    st.market = _paper_market()
+    eng.broker.positions["BTC"] = Position(
+        asset="BTC", ticker=st.market.ticker, side="yes", qty=2, entry=0.40,
+        entry_ts=time.time(), fees=0.0, target=0.06, reason_in="ghost", kind="imported",
+    )
+    api.positions = []  # Kalshi flat
+    assert eng._reconcile_ghost("BTC") is True
+    assert "BTC" not in eng.broker.positions
+
 
 
 def test_paper_partial_close():
@@ -652,6 +703,31 @@ def test_ioc_sends_reduce_only():
     assert captured["body"]["reduce_only"] is True
     assert captured["body"]["side"] == "ask"
     assert "/portfolio/events/orders" in captured["url"]
+
+
+
+def test_static_roughs_and_dash_js():
+    import urllib.request
+    from scalper.config import ScalperConfig
+    from scalper.engine import Engine
+    from scalper.server import serve
+
+    eng = Engine(ScalperConfig())
+    httpd = serve(eng, "127.0.0.1", 0)
+    port = httpd.server_address[1]
+    try:
+        for path in ("/dash.js", "/roughs/", "/roughs/01-kalshi-soft.html"):
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=3) as resp:
+                assert resp.status == 200
+                body = resp.read()
+                assert len(body) > 100
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as resp:
+            html = resp.read().decode()
+            assert "dash.js" in html
+            assert "Outfit" in html or "SCALPER" in html
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
 
 
 def test_action_http_requires_token():
