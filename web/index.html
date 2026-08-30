@@ -178,6 +178,13 @@
       border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px;
     }
     .rough-tag a { color: var(--yes); text-decoration: none; }
+    .reach-help {
+      position: fixed; left: 12px; right: 12px; top: calc(12px + env(safe-area-inset-top, 0px));
+      z-index: 9; background: #2a1c10; border: 1px solid rgba(234,179,8,.35);
+      color: var(--text); border-radius: 14px; padding: 12px 14px; font-size: 13px; line-height: 1.45;
+      box-shadow: 0 16px 40px rgba(0,0,0,.45);
+    }
+    .reach-help[hidden] { display: none !important; }
     .install-hint {
       position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
       z-index: 8; display: flex; gap: 10px; align-items: center;
@@ -350,6 +357,7 @@
       </div>
     </div>
   </div>
+  <div class="reach-help" id="reachHelp" hidden></div>
   <div class="install-hint" id="installHint" hidden>
     <div>
       <strong>Add to Home Screen</strong>

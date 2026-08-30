@@ -730,12 +730,14 @@ def test_static_roughs_and_dash_js():
             assert "/manifest.webmanifest" in html
             assert "apple-touch-icon.png" in html
             assert 'id="installHint"' in html
+            assert 'id="reachHelp"' in html
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/dash.js", timeout=3) as resp:
             js = resp.read().decode()
             assert "localStorage" in js
             assert "captureUrlToken" in js
             assert "showInstallHint" in js
             assert "isStandalone" in js
+            assert "showReachHelp" in js
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/manifest.webmanifest", timeout=3) as resp:
             assert resp.status == 200
             assert "manifest" in (resp.headers.get("Content-Type") or "")
@@ -815,7 +817,7 @@ def test_action_http_requires_token():
 
 
 def test_dashboard_urls_loopback_when_bound_local():
-    from scalper.netinfo import dashboard_urls, lan_ipv4s
+    from scalper.netinfo import dashboard_urls, is_home_wifi_ip, lan_ipv4s, startup_lines
 
     assert dashboard_urls(8787, "127.0.0.1") == ["http://127.0.0.1:8787"]
     wide = dashboard_urls(8787, "0.0.0.0")
@@ -825,6 +827,15 @@ def test_dashboard_urls_loopback_when_bound_local():
         assert f"http://{extra[0]}:8787" in wide
     else:
         assert wide == ["http://127.0.0.1:8787"]
+    assert is_home_wifi_ip("192.168.1.42") is True
+    assert is_home_wifi_ip("10.0.0.5") is True
+    assert is_home_wifi_ip("100.64.1.2") is True
+    assert is_home_wifi_ip("172.30.0.2") is False
+    assert is_home_wifi_ip("127.0.0.1") is False
+    bound = startup_lines(8787, "127.0.0.1")
+    assert bound[0] == "Scalper 3000 dashboard  http://127.0.0.1:8787"
+    assert any("Phone cannot open" in line for line in bound)
+    assert not any(line.startswith("Phone (same Wi-Fi)") for line in bound)
 
 
 def test_parse_asset_allowlist():

@@ -75,6 +75,20 @@ Optional first-load bookmark on a **private** network: `http://192.168.x.x:8787/
 
 The dashboard stays locked without the token. LIVE still requires typing `LIVE`, then Resume.
 
+### If the iPhone will not open the board
+
+This Cursor Cloud box is **not** on your Wi-Fi. `http://127.0.0.1:8787` and any `172.30.…` address printed here will not load on the phone.
+
+1. On the **Pi / PC that runs the bot**, run `hostname -I` (or Windows `ipconfig`). You want a `192.168.…` or `10.…` address.
+2. Confirm the bot is up: `deploy/scalperctl.sh status` or look for `Scalper 3000 dashboard` in the terminal.
+3. On the iPhone, **Safari** (not Chrome). Same Wi-Fi, not cellular, not a guest network.
+4. Type it exactly, including `http://` — Safari will fail or search if you omit it or use `https://`:
+
+   `http://192.168.x.x:8787`
+
+5. If Safari asks for **Local Network**, allow it. Settings → Privacy & Security → Local Network → Safari on.
+6. Delete any home-screen icon you added from the wrong URL. Add a new one only after this page actually loads.
+
 ## Tests
 
 ```bash

@@ -374,11 +374,14 @@ const $ = (id) => document.getElementById(id);
           $("lock").textContent = "LOCKED";
           $("lock").className = "pill warn";
           $("dashToken").hidden = false;
+          showReachHelp(null);
           return;
         }
+        showReachHelp(null);
         render(s);
       } catch (e) {
         $("feed").textContent = "OFFLINE";
+        showReachHelp("offline");
       }
     }
     $("markets").addEventListener("click", (e) => {
@@ -513,7 +516,27 @@ const $ = (id) => document.getElementById(id);
       try { localStorage.setItem(A2HS_KEY, "1"); } catch (_) {}
       $("installHint").hidden = true;
     });
+    function hostIsThisComputerOnly() {
+      const h = (location.hostname || "").toLowerCase();
+      return h === "127.0.0.1" || h === "localhost" || h === "[::1]" || h === "::1";
+    }
+    function showReachHelp(kind) {
+      const el = $("reachHelp");
+      if (!el) return;
+      if (kind === "offline") {
+        el.hidden = false;
+        el.textContent = "Phone cannot reach the bot. Same Wi-Fi as the Pi/PC. Type http:// then that machine's 192.168.…:8787 — not https, not 127.0.0.1. Privacy → Local Network → Safari on.";
+        return;
+      }
+      if (kind === "localhost" || hostIsThisComputerOnly()) {
+        el.hidden = false;
+        el.textContent = "This tab is this computer only. An iPhone will not open 127.0.0.1. On the Pi run hostname -I, then Safari → http://THAT_IP:8787";
+        return;
+      }
+      el.hidden = true;
+    }
     showInstallHint();
+    showReachHelp(hostIsThisComputerOnly() ? "localhost" : null);
     document.addEventListener("keydown", (e) => {
       if (e.target && ["INPUT", "TEXTAREA"].includes(e.target.tagName)) return;
       const cards = (ui.last && ui.last.cards) || [];
