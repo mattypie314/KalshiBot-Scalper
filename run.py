@@ -9,6 +9,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
+from scalper.envfile import load_dotenv  # noqa: E402
+
+load_dotenv(ROOT / ".env")
+
 from scalper.config import load_config  # noqa: E402
 from scalper.engine import Engine  # noqa: E402
 from scalper.server import serve  # noqa: E402

@@ -5,7 +5,7 @@
     {
       "name": "scalper",
       "command": "python3 run.py",
-      "description": "Paper scalper engine and dashboard on port 8787"
+      "description": "Scalper engine and dashboard on port 8787 (loads .env if present)"}
     }
   ],
   "ports": [

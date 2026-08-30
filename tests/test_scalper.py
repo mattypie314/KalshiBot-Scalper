@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import math
+import os
 import time
 
-from scalper.config import ASSETS, ScalperConfig, asset_for_ticker, load_config, parse_asset_allowlist
+from scalper.config import ASSETS, ScalperConfig, asset_for_ticker, load_config, load_dotenv, parse_asset_allowlist
 from scalper.fees import net_edge_after_costs, taker_fee
 from scalper.model import SpotHistory, Tick, fair_yes, norm_cdf, vol_from_closes
 from scalper.risk import RiskState, allow_entry, size_contracts
@@ -716,6 +717,29 @@ def test_load_config_respects_scalper_assets(monkeypatch):
     assert "ETH" in load_config().assets
     monkeypatch.setenv("SCALPER_ASSETS", "BTC")
     assert list(load_config().assets) == ["BTC"]
+
+
+def test_load_config_reads_live_env(monkeypatch):
+    monkeypatch.setenv("SCALPER_DASHBOARD_TOKEN", "lock-me")
+    monkeypatch.setenv("SCALPER_BANKROLL", "250")
+    monkeypatch.setenv("KALSHI_API_BASE", "https://external-api.demo.kalshi.co/trade-api/v2")
+    cfg = load_config()
+    assert cfg.dashboard_token == "lock-me"
+    assert cfg.bankroll == 250.0
+    from scalper.config import kalshi_base
+
+    assert "demo.kalshi.co" in kalshi_base()
+
+
+def test_load_dotenv_does_not_override_env(tmp_path, monkeypatch):
+    monkeypatch.delenv("SCALPER_DOTENV_TEST", raising=False)
+    monkeypatch.setenv("SCALPER_DOTENV_KEEP", "from-env")
+    p = tmp_path / ".env"
+    p.write_text("SCALPER_DOTENV_TEST=from-file\nSCALPER_DOTENV_KEEP=from-file\n")
+    assert load_dotenv(p) == p
+    assert os.environ["SCALPER_DOTENV_TEST"] == "from-file"
+    assert os.environ["SCALPER_DOTENV_KEEP"] == "from-env"
+    assert load_dotenv(tmp_path / "missing.env") is None
 
 
 def test_engine_btc_only_universe():

@@ -14,7 +14,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from .book import Book, parse_book, top_from_market
-from .config import ASSETS, BITSTAMP_REST, COINBASE_REST, COINBASE_WS, KALSHI_BASE, KRAKEN_REST
+from .config import ASSETS, BITSTAMP_REST, COINBASE_REST, COINBASE_WS, KRAKEN_REST, kalshi_base
 
 
 MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
@@ -311,7 +311,7 @@ class KalshiFeed:
     def discover_active(self, series: str) -> dict | None:
         constructed = current_window_ticker(series)
         try:
-            m = _market_payload(http_get(f"{KALSHI_BASE}/markets/{urllib.parse.quote(constructed)}"))
+            m = _market_payload(http_get(f"{kalshi_base()}/markets/{urllib.parse.quote(constructed)}"))
             if m and m.get("status") in {"active", "open", "initialized"}:
                 if float(m.get("floor_strike") or 0) > 0 or m.get("status") in {"active", "open"}:
                     return m
@@ -319,7 +319,7 @@ class KalshiFeed:
             pass
         try:
             data = http_get(
-                f"{KALSHI_BASE}/markets?series_ticker={urllib.parse.quote(series)}&status=open&limit=20"
+                f"{kalshi_base()}/markets?series_ticker={urllib.parse.quote(series)}&status=open&limit=20"
             )
         except Exception:
             return None
@@ -347,7 +347,7 @@ class KalshiFeed:
             ticker = self._tickers.get(asset)
         if ticker:
             try:
-                data = http_get(f"{KALSHI_BASE}/markets/{urllib.parse.quote(ticker)}")
+                data = http_get(f"{kalshi_base()}/markets/{urllib.parse.quote(ticker)}")
                 m = _market_payload(data)
                 if not m or m.get("status") not in {"active", "open"}:
                     m = None
@@ -365,7 +365,7 @@ class KalshiFeed:
     def snapshot_market(self, asset: str, ticker: str) -> MarketSnap | None:
         """Exact-ticker quote, used to flatten an imported leftover position."""
         try:
-            data = http_get(f"{KALSHI_BASE}/markets/{urllib.parse.quote(ticker)}")
+            data = http_get(f"{kalshi_base()}/markets/{urllib.parse.quote(ticker)}")
             m = _market_payload(data)
         except Exception:
             return None
@@ -377,7 +377,7 @@ class KalshiFeed:
         ticker = m["ticker"]
         book = top_from_market(m)
         try:
-            ob = http_get(f"{KALSHI_BASE}/markets/{urllib.parse.quote(ticker)}/orderbook")
+            ob = http_get(f"{kalshi_base()}/markets/{urllib.parse.quote(ticker)}/orderbook")
             parsed = parse_book((ob or {}).get("orderbook_fp"))
             if parsed.yes_bids or parsed.no_bids:
                 book = parsed
