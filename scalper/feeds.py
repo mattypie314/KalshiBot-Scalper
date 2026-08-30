@@ -360,6 +360,21 @@ class KalshiFeed:
         ticker = m["ticker"]
         with self._lock:
             self._tickers[asset] = ticker
+        return self._snap_from_market(asset, m)
+
+    def snapshot_market(self, asset: str, ticker: str) -> MarketSnap | None:
+        """Exact-ticker quote, used to flatten an imported leftover position."""
+        try:
+            data = http_get(f"{KALSHI_BASE}/markets/{urllib.parse.quote(ticker)}")
+            m = _market_payload(data)
+        except Exception:
+            return None
+        if not m:
+            return None
+        return self._snap_from_market(asset, m)
+
+    def _snap_from_market(self, asset: str, m: dict) -> MarketSnap:
+        ticker = m["ticker"]
         book = top_from_market(m)
         try:
             ob = http_get(f"{KALSHI_BASE}/markets/{urllib.parse.quote(ticker)}/orderbook")

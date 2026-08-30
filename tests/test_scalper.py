@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import time
 
-from scalper.config import ASSETS, ScalperConfig, load_config, parse_asset_allowlist
+from scalper.config import ASSETS, ScalperConfig, asset_for_ticker, load_config, parse_asset_allowlist
 from scalper.fees import net_edge_after_costs, taker_fee
 from scalper.model import SpotHistory, Tick, fair_yes, norm_cdf, vol_from_closes
 from scalper.risk import RiskState, allow_entry, size_contracts
@@ -379,6 +379,7 @@ class _FakeKalshi:
         self.orders = []
         self.fill_qty = 5.0
         self.fail_balance = False
+        self.positions = []
 
     def balance(self):
         if self.fail_balance:
@@ -386,15 +387,27 @@ class _FakeKalshi:
         return self.cash
 
     def market_position_count(self):
-        return 0
+        return len(self.positions)
 
-    def ioc(self, ticker, book_side, qty, yes_price):
+    def open_positions(self):
+        return list(self.positions)
+
+    def ioc(self, ticker, book_side, qty, yes_price, reduce_only=False):
         from scalper.kalshi_api import LiveFill
 
-        self.orders.append({"ticker": ticker, "side": book_side, "qty": qty, "px": yes_price})
-        if self.fill_qty < 1:
+        fill = min(self.fill_qty, qty) if self.fill_qty >= 1 else 0.0
+        self.orders.append(
+            {
+                "ticker": ticker,
+                "side": book_side,
+                "qty": qty,
+                "px": yes_price,
+                "reduce_only": reduce_only,
+            }
+        )
+        if fill < 1:
             return LiveFill(ok=False, error="live IOC unfilled")
-        return LiveFill(ok=True, qty=self.fill_qty, price=yes_price, fee=0.02, order_id="ord1")
+        return LiveFill(ok=True, qty=fill, price=yes_price, fee=0.02, order_id="ord1")
 
 
 def test_live_toggle_requires_confirm_and_keys():
@@ -418,8 +431,11 @@ def test_live_toggle_with_client_and_orders():
     from scalper.engine import Engine
 
     api = _FakeKalshi()
-    eng = Engine(ScalperConfig(), kalshi_api=api)
+    cfg = ScalperConfig()
+    cfg.dashboard_token = "secret"
+    eng = Engine(cfg, kalshi_api=api)
     assert eng.state()["live_ready"] is True
+    assert eng.state()["dashboard_locked"] is True
     assert eng.action({"op": "mode", "mode": "LIVE", "confirm": "LIVE"})["ok"] is True
     assert eng.mode == "LIVE"
     assert eng.paused is True
@@ -490,6 +506,195 @@ def test_net_edge_after_taker_fees_positive_only_if_gap_clears_cost():
     net = net_edge_after_costs(0.51, 0.50, "yes", 1.0, is_taker=True, assumed_exit_move=0.06)
     # May still be slightly positive because assumed exit is +6¢; just sanity-check type.
     assert isinstance(net, float)
+
+
+def test_live_requires_dashboard_token():
+    from scalper.engine import Engine
+
+    api = _FakeKalshi()
+    eng = Engine(ScalperConfig(), kalshi_api=api)
+    blocked = eng.action({"op": "mode", "mode": "LIVE", "confirm": "LIVE"})
+    assert blocked["ok"] is False
+    assert "TOKEN" in blocked["error"].upper()
+    assert eng.mode == "PAPER"
+
+
+def test_live_imports_kalshi_positions():
+    from scalper.engine import Engine
+
+    api = _FakeKalshi()
+    api.positions = [
+        {"ticker": "KXBTC15M-26AUG300000-00", "side": "yes", "qty": 4, "entry": 0.44, "fees": 0.03},
+        {"ticker": "UNKNOWN-99", "side": "no", "qty": 2, "entry": 0.30, "fees": 0.0},
+    ]
+    cfg = ScalperConfig()
+    cfg.dashboard_token = "secret"
+    eng = Engine(cfg, kalshi_api=api)
+    out = eng.action({"op": "mode", "mode": "LIVE", "confirm": "LIVE"})
+    assert out["ok"] is True
+    assert out["imported"] == ["BTC"]
+    assert "UNKNOWN-99" in out["skipped"]
+    pos = eng.broker.positions["BTC"]
+    assert pos.qty == 4
+    assert pos.side == "yes"
+    assert pos.reason_in == "imported from Kalshi"
+    assert pos.ticker.startswith("KXBTC15M")
+
+
+def test_live_exit_partial_keeps_remainder_and_reduce_only():
+    from scalper.broker import Position
+    from scalper.engine import Engine
+
+    api = _FakeKalshi()
+    cfg = ScalperConfig()
+    cfg.dashboard_token = "secret"
+    eng = Engine(cfg, kalshi_api=api)
+    assert eng.action({"op": "mode", "mode": "LIVE", "confirm": "LIVE"})["ok"] is True
+    st = eng.assets["BTC"]
+    st.market = _paper_market()
+    now = time.time()
+    eng.broker.positions["BTC"] = Position(
+        asset="BTC", ticker=st.market.ticker, side="yes", qty=5, entry=0.40,
+        entry_ts=now - 8, fees=0.05, target=0.06, reason_in="t", kind="lag_yes",
+    )
+    api.fill_qty = 2
+    out = eng.flatten_now("BTC")
+    assert out["ok"] is False
+    assert "partial" in (out["error"] or "").lower() or "partial" in st.skip
+    assert eng.broker.positions["BTC"].qty == 3
+    assert eng.broker.trades[-1]["qty"] == 2
+    assert eng.broker.trades[-1]["partial"] is True
+    assert api.orders[-1]["reduce_only"] is True
+    assert api.orders[-1]["side"] == "ask"
+
+
+def test_paper_partial_close():
+    from scalper.broker import PaperBroker, Position
+
+    book = PaperBroker(cash=100)
+    book.positions["BTC"] = Position(
+        asset="BTC", ticker="T", side="yes", qty=5, entry=0.40,
+        entry_ts=time.time(), fees=0.05, target=0.06, reason_in="t", kind="lag_yes",
+    )
+    rec = book.close("BTC", 0.46, 0.01, "partial", qty=2)
+    assert rec["qty"] == 2
+    assert rec["partial"] is True
+    assert abs(book.positions["BTC"].qty - 3) < 1e-9
+    rec2 = book.close("BTC", 0.46, 0.01, "rest")
+    assert rec2["partial"] is False
+    assert "BTC" not in book.positions
+
+
+def test_parse_market_positions_and_ticker_map():
+    from scalper.kalshi_api import parse_market_positions
+
+    rows = parse_market_positions(
+        {
+            "market_positions": [
+                {
+                    "ticker": "KXBTC15M-26AUG300000-00",
+                    "position_fp": "4.00",
+                    "market_exposure_dollars": "1.76",
+                    "fees_paid_dollars": "0.03",
+                },
+                {"ticker": "KXETH15M-26AUG300000-00", "position_fp": "-2.00", "market_exposure_dollars": "0.80"},
+                {"ticker": "FLAT", "position_fp": "0.00"},
+            ]
+        }
+    )
+    assert rows[0]["side"] == "yes"
+    assert rows[0]["qty"] == 4
+    assert abs(rows[0]["entry"] - 0.44) < 1e-9
+    assert rows[1]["side"] == "no"
+    assert rows[1]["qty"] == 2
+    assert asset_for_ticker("KXBTC15M-26AUG300000-00") == "BTC"
+    assert asset_for_ticker("KXETH15M-26AUG300000-00") == "ETH"
+    assert asset_for_ticker("NOPE") is None
+
+
+def test_ioc_sends_reduce_only():
+    import json
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from scalper.kalshi_api import KalshiClient, KalshiCreds
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode()
+    captured = {}
+
+    def transport(method, url, headers, body):
+        captured["body"] = json.loads(body)
+        captured["url"] = url
+        return 201, {
+            "order_id": "x",
+            "fill_count": "3.00",
+            "remaining_count": "0.00",
+            "average_fill_price": "0.4200",
+            "average_fee_paid": "0.01",
+        }
+
+    client = KalshiClient(KalshiCreds("kid", pem), transport=transport)
+    fill = client.ioc("T", "ask", 3, 0.42, reduce_only=True)
+    assert fill.ok is True
+    assert fill.qty == 3
+    assert captured["body"]["reduce_only"] is True
+    assert captured["body"]["side"] == "ask"
+    assert "/portfolio/events/orders" in captured["url"]
+
+
+def test_action_http_requires_token():
+    import json
+    import urllib.error
+    import urllib.request
+    from scalper.engine import Engine
+    from scalper.server import serve
+
+    cfg = ScalperConfig()
+    cfg.dashboard_token = "lock"
+    eng = Engine(cfg)
+    httpd = serve(eng, "127.0.0.1", 0)
+    port = httpd.server_address[1]
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/action",
+            data=json.dumps({"op": "pause"}).encode(),
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            urllib.request.urlopen(req, timeout=3)
+            raise AssertionError("expected 401")
+        except urllib.error.HTTPError as e:
+            assert e.code == 401
+        try:
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/api/state", timeout=3)
+            raise AssertionError("expected 401")
+        except urllib.error.HTTPError as e:
+            assert e.code == 401
+        ok = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/action",
+            data=json.dumps({"op": "pause"}).encode(),
+            method="POST",
+            headers={"Content-Type": "application/json", "X-Scalper-Token": "lock"},
+        )
+        with urllib.request.urlopen(ok, timeout=3) as resp:
+            body = json.loads(resp.read().decode())
+        assert body == {"ok": True, "paused": True}
+        state = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/state",
+            headers={"X-Scalper-Token": "lock"},
+        )
+        with urllib.request.urlopen(state, timeout=3) as resp:
+            snap = json.loads(resp.read().decode())
+        assert snap["paused"] is True
+        assert snap["dashboard_locked"] is True
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
 
 
 def test_parse_asset_allowlist():

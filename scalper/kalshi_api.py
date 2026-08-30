@@ -89,6 +89,43 @@ def _default_transport(method: str, url: str, headers: dict[str, str], body: byt
         return e.code, payload
 
 
+def parse_market_positions(data: dict | None) -> list[dict]:
+    """Normalize GET /portfolio/positions into {ticker, side, qty, entry, fees}."""
+    rows = []
+    if isinstance(data, dict):
+        rows = data.get("market_positions") or data.get("positions") or []
+    out: list[dict] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        qty = _f(row.get("position_fp") or row.get("position") or row.get("quantity"))
+        if abs(qty) < 1:
+            continue
+        ticker = str(row.get("ticker") or "").strip()
+        if not ticker:
+            continue
+        side = "yes" if qty > 0 else "no"
+        abs_qty = abs(qty)
+        exposure = _f(row.get("market_exposure_dollars"))
+        if exposure <= 0 and row.get("market_exposure") not in (None, ""):
+            exposure = _f(row.get("market_exposure"))
+        fees = _f(row.get("fees_paid_dollars"))
+        if fees <= 0 and row.get("fees_paid") not in (None, ""):
+            fees = _f(row.get("fees_paid"))
+        entry = exposure / abs_qty if exposure > 0 else 0.50
+        entry = min(max(entry, 0.01), 0.99)
+        out.append(
+            {
+                "ticker": ticker,
+                "side": side,
+                "qty": abs_qty,
+                "entry": entry,
+                "fees": max(fees, 0.0),
+            }
+        )
+    return out
+
+
 def _f(x: Any, default: float = 0.0) -> float:
     try:
         if x is None or x == "":
@@ -143,22 +180,25 @@ class KalshiClient:
 
     def market_position_count(self) -> int:
         try:
-            code, data = self.request("GET", "/portfolio/positions")
+            return len(self.open_positions())
         except Exception:
             return 0
-        if code >= 400:
-            return 0
-        rows = data.get("market_positions") or data.get("positions") or []
-        n = 0
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            qty = _f(row.get("position") or row.get("position_fp") or row.get("quantity"))
-            if abs(qty) >= 1:
-                n += 1
-        return n
 
-    def ioc(self, ticker: str, book_side: str, qty: float, yes_price: float) -> LiveFill:
+    def open_positions(self) -> list[dict]:
+        code, data = self.request("GET", "/portfolio/positions")
+        if code >= 400:
+            raise RuntimeError(data.get("message") or data.get("error") or f"positions HTTP {code}")
+        return parse_market_positions(data)
+
+    def ioc(
+        self,
+        ticker: str,
+        book_side: str,
+        qty: float,
+        yes_price: float,
+        *,
+        reduce_only: bool = False,
+    ) -> LiveFill:
         """Immediate-or-cancel limit on the YES book. bid=buy YES, ask=sell YES."""
         if book_side not in {"bid", "ask"}:
             return LiveFill(ok=False, error=f"bad side {book_side}")
@@ -173,6 +213,7 @@ class KalshiClient:
             "time_in_force": "immediate_or_cancel",
             "self_trade_prevention_type": "taker_at_cross",
             "post_only": False,
+            "reduce_only": bool(reduce_only),
         }
         code, data = self.request("POST", "/portfolio/events/orders", body)
         if code >= 400:

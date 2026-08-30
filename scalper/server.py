@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -12,12 +13,34 @@ from .engine import Engine
 WEB = Path(__file__).resolve().parent.parent / "web"
 
 
+def tokens_match(provided: str, needed: str) -> bool:
+    if not needed:
+        return True
+    a = (provided or "").encode()
+    b = needed.encode()
+    if len(a) != len(b):
+        return False
+    return hmac.compare_digest(a, b)
+
+
 class Handler(BaseHTTPRequestHandler):
     engine: Engine
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args) -> None:  # noqa: A003
         return
+
+    def _provided_token(self, payload: dict | None = None) -> str:
+        hdr = (self.headers.get("X-Scalper-Token") or "").strip()
+        if hdr:
+            return hdr
+        if payload and isinstance(payload, dict):
+            return str(payload.get("token") or "").strip()
+        return ""
+
+    def _token_ok(self, payload: dict | None = None) -> bool:
+        need = (self.engine.cfg.dashboard_token or "").strip()
+        return tokens_match(self._provided_token(payload), need)
 
     def do_HEAD(self) -> None:  # noqa: N802
         self._dispatch(write_body=False)
@@ -31,6 +54,13 @@ class Handler(BaseHTTPRequestHandler):
             self._file(WEB / "index.html", "text/html; charset=utf-8", write_body=write_body)
             return
         if path == "/api/state":
+            if not self._token_ok():
+                self._json(
+                    401,
+                    {"ok": False, "error": "dashboard token required", "dashboard_locked": True},
+                    write_body=write_body,
+                )
+                return
             self._json(200, self.engine.state(), write_body=write_body)
             return
         if path == "/health":
@@ -50,6 +80,9 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("payload must be an object")
         except (ValueError, UnicodeDecodeError) as e:
             self._json(400, {"ok": False, "error": str(e)})
+            return
+        if not self._token_ok(payload):
+            self._json(401, {"ok": False, "error": "dashboard token required", "dashboard_locked": True})
             return
         self._json(200, self.engine.action(payload))
 

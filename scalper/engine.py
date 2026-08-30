@@ -11,7 +11,7 @@ from typing import Any
 
 from .book import Book
 from .broker import PaperBroker, Position
-from .config import ScalperConfig
+from .config import ScalperConfig, asset_for_ticker
 from .fees import taker_fee
 from .feeds import KalshiFeed, MarketSnap, SpotFeed
 from .kalshi_api import KalshiClient, LiveFill
@@ -62,6 +62,8 @@ class Engine:
         self.live_error = "" if self.kalshi_api.ready else "Kalshi keys missing. Set KALSHI_API_KEY and KALSHI_PRIVATE_KEY."
         if cfg.live and not self.kalshi_api.ready:
             self.note("LIVE requested but no Kalshi keys — staying PAPER. Toggle stays off.", "warn")
+        elif self.kalshi_api.ready and not (cfg.dashboard_token or "").strip():
+            self.note("Kalshi keys loaded, but LIVE stays locked until SCALPER_DASHBOARD_TOKEN is set.", "warn")
         elif self.kalshi_api.ready:
             self.note("Kalshi keys loaded. Dashboard can toggle PAPER ↔ LIVE.")
 
@@ -295,26 +297,48 @@ class Engine:
         pos = self.broker.positions.get(st.asset)
         if not pos:
             return
+        quote = mkt
+        if pos.ticker and mkt.ticker and pos.ticker != mkt.ticker:
+            alt = self.kalshi.snapshot_market(st.asset, pos.ticker)
+            if alt:
+                quote = alt
         if pos.side == "yes":
-            px = mkt.yes_bid
+            px = quote.yes_bid
         else:
-            px = round(1.0 - mkt.yes_ask, 4)
+            px = round(1.0 - quote.yes_ask, 4)
         if px <= 0:
             st.skip = "no bid to exit"
             return
         fee = taker_fee(px, pos.qty, self.cfg.fee_multiplier) if taker else 0.0
+        orig_qty = pos.qty
         if self.mode == "LIVE":
             live = self._live_exit(pos, px)
-            if not live.ok:
+            filled = live.qty
+            if filled < 1:
                 st.skip = live.error or "live exit unfilled"
                 self.note(f"LIVE OUT failed {st.asset}: {st.skip}", "warn", asset=st.asset)
                 return
             px = live.price
             fee = live.fee
-            if live.qty + 1e-9 < pos.qty:
-                st.skip = f"live exit partial {live.qty:.0f}/{pos.qty:.0f}"
-                self.note(f"LIVE OUT partial {st.asset}: {st.skip}", "warn", asset=st.asset)
+            rec = self.broker.close(st.asset, px, fee, reason, is_taker=taker, qty=filled)
+            self.risk.open_count = len(self.broker.positions)
+            still = st.asset in self.broker.positions
+            if still:
+                st.skip = f"live exit partial {filled:.0f}/{orig_qty:.0f}"
+                self.note(
+                    f"OUT partial {st.asset} {filled:.2f}/{orig_qty:.2f} @ {px:.2f}  {reason}",
+                    "warn",
+                    asset=st.asset,
+                )
                 return
+            self.risk.last_exit_ts[st.asset] = time.time()
+            if rec:
+                self.note(
+                    f"OUT {st.asset} {pos.side.upper()} @ {px:.2f}  pnl {rec['pnl']:+.2f}  {reason}",
+                    "trade",
+                    asset=st.asset,
+                )
+            return
         rec = self.broker.close(st.asset, px, fee, reason, is_taker=taker)
         self.risk.last_exit_ts[st.asset] = time.time()
         self.risk.open_count = len(self.broker.positions)
@@ -340,9 +364,9 @@ class Engine:
             book_side, yes_px = "ask", side_px
         else:
             book_side, yes_px = "bid", round(1.0 - side_px, 4)
-        fill = self.kalshi_api.ioc(pos.ticker, book_side, pos.qty, yes_px)
-        if fill.ok and pos.side == "no":
-            fill.price = round(1.0 - fill.price, 4)
+        fill = self.kalshi_api.ioc(pos.ticker, book_side, pos.qty, yes_px, reduce_only=True)
+        if (fill.ok or fill.qty >= 1) and pos.side == "no":
+            fill.price = round(1.0 - (fill.price or yes_px), 4)
         return fill
 
     def set_mode(self, mode: str, confirm: str = "") -> dict:
@@ -362,26 +386,67 @@ class Engine:
             if not self.kalshi_api.ready:
                 self.live_error = "Kalshi keys missing. Set KALSHI_API_KEY and KALSHI_PRIVATE_KEY."
                 return {"ok": False, "error": self.live_error, "live_ready": False}
+            if not (self.cfg.dashboard_token or "").strip():
+                self.live_error = (
+                    "Set SCALPER_DASHBOARD_TOKEN before LIVE so :8787 cannot be armed by anyone who can reach it."
+                )
+                return {"ok": False, "error": self.live_error, "live_ready": True, "dashboard_locked": False}
             if self.broker.positions:
                 return {"ok": False, "error": "flatten open positions before switching to LIVE"}
             try:
                 cash = self.kalshi_api.balance()
-                already = self.kalshi_api.market_position_count()
+                held = self.kalshi_api.open_positions()
             except Exception as e:
                 self.live_error = f"Kalshi auth failed: {e}"
                 return {"ok": False, "error": self.live_error, "live_ready": False}
             with self._lock:
                 self.live_book = PaperBroker(cash=cash)
+                imported: list[str] = []
+                skipped: list[str] = []
+                for row in held:
+                    asset = asset_for_ticker(row.get("ticker") or "", self.cfg.assets)
+                    if not asset:
+                        skipped.append(str(row.get("ticker") or "?"))
+                        continue
+                    if asset in self.live_book.positions:
+                        skipped.append(str(row.get("ticker") or asset))
+                        continue
+                    self.live_book.positions[asset] = Position(
+                        asset=asset,
+                        ticker=str(row["ticker"]),
+                        side=str(row["side"]),
+                        qty=float(row["qty"]),
+                        entry=float(row["entry"]),
+                        entry_ts=time.time(),
+                        fees=float(row.get("fees") or 0.0),
+                        target=self.cfg.target_cents,
+                        reason_in="imported from Kalshi",
+                        kind="imported",
+                    )
+                    self.risk.traded_tickers.add(str(row["ticker"]))
+                    imported.append(asset)
                 self.broker = self.live_book
+                self.risk.open_count = len(self.live_book.positions)
                 self.mode = "LIVE"
                 self.paused = True
                 self.live_error = ""
-                extra = f" Kalshi already has {already} open position(s)." if already else ""
+                extra = ""
+                if imported:
+                    extra += f" Imported {len(imported)} Kalshi position(s): {', '.join(imported)}."
+                if skipped:
+                    extra += f" Left {len(skipped)} unmatched ticker(s) on Kalshi."
                 self.note(
                     f"LIVE real-money mode. Cash ${cash:.2f}. Paused — resume to send Kalshi orders.{extra}",
                     "warn",
                 )
-            return {"ok": True, "mode": "LIVE", "paused": True, "cash": cash}
+            return {
+                "ok": True,
+                "mode": "LIVE",
+                "paused": True,
+                "cash": cash,
+                "imported": imported,
+                "skipped": skipped,
+            }
         if self.broker.positions:
             return {"ok": False, "error": "flatten live positions before returning to PAPER"}
         with self._lock:
@@ -564,6 +629,7 @@ class Engine:
                 "mode": self.mode,
                 "live_ready": self.kalshi_api.ready,
                 "live_error": self.live_error,
+                "dashboard_locked": bool((self.cfg.dashboard_token or "").strip()),
                 "paused": self.paused,
                 "muted": sorted(self.muted),
                 "now": now,

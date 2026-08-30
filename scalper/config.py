@@ -116,9 +116,29 @@ class ScalperConfig:
     live: bool = os.environ.get("SCALPER_LIVE", "0") in {"1", "true", "TRUE", "yes"}
     host: str = os.environ.get("SCALPER_HOST", "0.0.0.0")
     port: int = int(os.environ.get("SCALPER_PORT", "8787"))
+    dashboard_token: str = os.environ.get("SCALPER_DASHBOARD_TOKEN", "").strip()
     fee_multiplier: float = 1.0
     maker_fee_multiplier: float = 0.0  # resting crypto 15m is typically maker-free
     assets: dict = field(default_factory=lambda: dict(ASSETS))
+
+
+def asset_for_ticker(ticker: str, assets: dict | None = None) -> str | None:
+    """Map KXBTC15M-… to BTC using the configured series prefixes."""
+    text = (ticker or "").strip().upper()
+    if not text:
+        return None
+    table = assets if assets is not None else ASSETS
+    best = ""
+    best_len = -1
+    for name, meta in table.items():
+        series = str((meta or {}).get("series") or "").strip().upper()
+        if not series:
+            continue
+        if text == series or text.startswith(series + "-"):
+            if len(series) > best_len:
+                best = name
+                best_len = len(series)
+    return best or None
 
 
 def parse_asset_allowlist(raw: str | None = None) -> dict:
