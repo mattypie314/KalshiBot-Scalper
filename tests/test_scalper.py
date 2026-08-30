@@ -699,9 +699,11 @@ def test_action_http_requires_token():
 
 
 def test_parse_asset_allowlist():
-    assert list(parse_asset_allowlist("").keys()) == list(ASSETS)
-    assert list(parse_asset_allowlist("   ").keys()) == list(ASSETS)
+    assert list(parse_asset_allowlist("").keys()) == ["BTC"]
+    assert list(parse_asset_allowlist("   ").keys()) == ["BTC"]
     assert list(parse_asset_allowlist("BTC").keys()) == ["BTC"]
+    assert list(parse_asset_allowlist("ALL").keys()) == list(ASSETS)
+    assert list(parse_asset_allowlist("*").keys()) == list(ASSETS)
     assert list(parse_asset_allowlist("btc, eth").keys()) == ["BTC", "ETH"]
     assert list(parse_asset_allowlist("BTC,BTC").keys()) == ["BTC"]
     try:
@@ -714,6 +716,8 @@ def test_parse_asset_allowlist():
 
 def test_load_config_respects_scalper_assets(monkeypatch):
     monkeypatch.delenv("SCALPER_ASSETS", raising=False)
+    assert list(load_config().assets) == ["BTC"]
+    monkeypatch.setenv("SCALPER_ASSETS", "ALL")
     assert "ETH" in load_config().assets
     monkeypatch.setenv("SCALPER_ASSETS", "BTC")
     assert list(load_config().assets) == ["BTC"]

@@ -159,22 +159,24 @@ def asset_for_ticker(ticker: str, assets: dict | None = None) -> str | None:
 
 
 def parse_asset_allowlist(raw: str | None = None) -> dict:
-    """Subset of ASSETS from SCALPER_ASSETS (comma-separated). Empty means all."""
+    """Subset of ASSETS from SCALPER_ASSETS (comma-separated). Empty defaults to BTC."""
     text = (raw if raw is not None else os.environ.get("SCALPER_ASSETS", "")).strip()
     if not text:
-        return dict(ASSETS)
+        return {"BTC": ASSETS["BTC"]}
     names: list[str] = []
     for part in text.replace(";", ",").split(","):
         name = part.strip().upper()
         if not name:
             continue
+        if name in {"ALL", "*"}:
+            return dict(ASSETS)
         if name not in ASSETS:
             known = ", ".join(ASSETS)
             raise ValueError(f"unknown SCALPER_ASSETS name {name!r}; known: {known}")
         if name not in names:
             names.append(name)
     if not names:
-        return dict(ASSETS)
+        return {"BTC": ASSETS["BTC"]}
     return {name: ASSETS[name] for name in names}
 
 
