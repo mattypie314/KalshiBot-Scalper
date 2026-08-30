@@ -449,7 +449,8 @@ def test_live_toggle_with_client_and_orders():
     fill = eng._live_enter(pos)
     assert fill.ok is True
     assert api.orders[-1]["side"] == "bid"
-    assert api.orders[-1]["px"] == 0.42
+    # LIVE crosses 1 tick through the book (0.42 → 0.43) so IOC still fills after RTT.
+    assert api.orders[-1]["px"] == 0.43
 
     no_pos = Position(
         asset="ETH", ticker="KXETH15M-TEST", side="no", qty=4, entry=0.40,
@@ -458,8 +459,14 @@ def test_live_toggle_with_client_and_orders():
     fill_no = eng._live_enter(no_pos)
     assert fill_no.ok is True
     assert api.orders[-1]["side"] == "ask"
-    assert abs(api.orders[-1]["px"] - 0.60) < 1e-9
-    assert abs(fill_no.price - 0.40) < 1e-9
+    # NO entry 0.40 → sell YES at 0.60, then cross 1 tick down to 0.59.
+    assert abs(api.orders[-1]["px"] - 0.59) < 1e-9
+    assert abs(fill_no.price - 0.41) < 1e-9
+
+    cfg.live_cross_ticks = 0
+    fill_flat = eng._live_enter(pos)
+    assert fill_flat.ok is True
+    assert api.orders[-1]["px"] == 0.42
 
     api.fill_qty = 0
     miss = eng._live_enter(pos)

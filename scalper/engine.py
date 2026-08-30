@@ -349,11 +349,24 @@ class Engine:
                 asset=st.asset,
             )
 
+    def _live_cross_yes_px(self, book_side: str, yes_px: float, asset: str) -> float:
+        """Pay through the book so LIVE IOC still fills after Ohio RTT."""
+        ticks = max(0, int(getattr(self.cfg, "live_cross_ticks", 1) or 0))
+        if ticks <= 0:
+            return yes_px
+        meta = self.cfg.assets.get(asset) or {}
+        tick = float(meta.get("tick") or 0.01)
+        slip = tick * ticks
+        if book_side == "bid":
+            return min(0.99, round(yes_px + slip, 4))
+        return max(0.01, round(yes_px - slip, 4))
+
     def _live_enter(self, pos: Position) -> LiveFill:
         if pos.side == "yes":
             book_side, yes_px = "bid", pos.entry
         else:
             book_side, yes_px = "ask", round(1.0 - pos.entry, 4)
+        yes_px = self._live_cross_yes_px(book_side, yes_px, pos.asset)
         fill = self.kalshi_api.ioc(pos.ticker, book_side, pos.qty, yes_px)
         if fill.ok and pos.side == "no":
             fill.price = round(1.0 - fill.price, 4)
@@ -364,6 +377,7 @@ class Engine:
             book_side, yes_px = "ask", side_px
         else:
             book_side, yes_px = "bid", round(1.0 - side_px, 4)
+        yes_px = self._live_cross_yes_px(book_side, yes_px, pos.asset)
         fill = self.kalshi_api.ioc(pos.ticker, book_side, pos.qty, yes_px, reduce_only=True)
         if (fill.ok or fill.qty >= 1) and pos.side == "no":
             fill.price = round(1.0 - (fill.price or yes_px), 4)

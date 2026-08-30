@@ -7,9 +7,7 @@ import json
 import os
 import time
 import uuid
-import urllib.error
 import urllib.parse
-import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -75,19 +73,14 @@ def sign_request(private_pem: str, timestamp: str, method: str, path: str) -> st
 
 
 def _default_transport(method: str, url: str, headers: dict[str, str], body: bytes | None) -> tuple[int, dict]:
-    req = urllib.request.Request(url, data=body, method=method, headers=headers)
-    try:
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            raw = resp.read().decode() or "{}"
-            return resp.status, json.loads(raw)
-    except urllib.error.HTTPError as e:
-        raw = e.read().decode() if e.fp else ""
-        try:
-            payload = json.loads(raw) if raw else {}
-        except json.JSONDecodeError:
-            payload = {"message": raw or str(e)}
-        payload.setdefault("message", str(e))
-        return e.code, payload
+    from .http_pool import http_json
+
+    code, payload = http_json(method, url, headers=headers, body=body, timeout=8.0)
+    if not isinstance(payload, dict):
+        payload = {"data": payload, "message": f"HTTP {code}"}
+    if code >= 400:
+        payload.setdefault("message", f"HTTP {code}")
+    return code, payload
 
 
 def parse_market_positions(data: dict | None) -> list[dict]:

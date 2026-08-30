@@ -6,7 +6,6 @@ import json
 import threading
 import time
 import urllib.parse
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -49,9 +48,9 @@ def _market_payload(data: Any) -> dict | None:
 
 
 def http_get(url: str, timeout: float = 8.0) -> Any:
-    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode())
+    from .http_pool import http_get_json
+
+    return http_get_json(url, timeout=timeout)
 
 
 def _safe_float(x: Any) -> float | None:

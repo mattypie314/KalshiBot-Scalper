@@ -129,7 +129,8 @@ class ScalperConfig:
     window_warmup_s: float = 20.0
     one_trade_per_window: bool = True
     min_top_depth_frac: float = 0.25  # never take more than 25% of visible size
-    poll_s: float = 0.8
+    poll_s: float = 0.2  # decision loop; floor is 0.15s in Engine.loop
+    live_cross_ticks: int = 1  # LIVE IOC: cross N ticks through the book to fill
     live: bool = False
     host: str = "0.0.0.0"
     port: int = 8787
@@ -187,5 +188,7 @@ def load_config() -> ScalperConfig:
         host=os.environ.get("SCALPER_HOST", "0.0.0.0"),
         port=int(os.environ.get("SCALPER_PORT", "8787")),
         dashboard_token=os.environ.get("SCALPER_DASHBOARD_TOKEN", "").strip(),
+        poll_s=float(os.environ.get("SCALPER_POLL_S", "0.2")),
+        live_cross_ticks=int(os.environ.get("SCALPER_LIVE_CROSS_TICKS", "1")),
         assets=parse_asset_allowlist(),
     )

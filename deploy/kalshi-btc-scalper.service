@@ -18,6 +18,8 @@ Environment=SCALPER_LIVE=0
 Environment=SCALPER_ASSETS=BTC
 Environment=SCALPER_HOST=0.0.0.0
 Environment=SCALPER_PORT=8787
+Environment=SCALPER_POLL_S=0.2
+Environment=SCALPER_LIVE_CROSS_TICKS=1
 Restart=always
 # Short delay so a hard kill can release :8787 before rebind (still sub-second).
 RestartSec=250ms
