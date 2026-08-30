@@ -43,6 +43,7 @@ Transport = Callable[[str, str, dict[str, str], bytes | None], tuple[int, dict]]
 def load_creds() -> KalshiCreds | None:
     key_id = (
         os.environ.get("KALSHI_API_KEY")
+        or os.environ.get("KALSHI_API_KEY_ID")
         or os.environ.get("KALSHI_ACCESS_KEY")
         or os.environ.get("KALSHI_KEY_ID")
         or ""
