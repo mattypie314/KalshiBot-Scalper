@@ -2,7 +2,7 @@
 
 scallllp me!
 
-Live watcher for **any Kalshi 15-minute crypto** contract (BTC, ETH, SOL, XRP, DOGE, BNB, HYPE) — Scotty's 15m Crypto Scalper 3000.
+Live watcher for Kalshi 15-minute crypto. **BTC is the default.** ETH, SOL, XRP, DOGE, BNB, and HYPE are opt-in.
 
 It compares Coinbase/Kraken/Bitstamp **spot** to the Kalshi **Yes/No** book every tick. It only papers a trade when there is a **clear, fast mismatch**: spot already moved and Kalshi has not, or a spike looks overdone.
 
@@ -30,11 +30,12 @@ python3 -m pip install -r requirements.txt
 python3 run.py
 ```
 
-BTC only (same app — Coinbase/Kalshi feeds for BTC, no ETH/SOL/etc):
+That is the BTC-only bot. The startup line should say `Markets: BTC`. `python3 run_btc.py` does the same thing.
+
+All seven markets:
 
 ```bash
-python3 run_btc.py
-# or: SCALPER_ASSETS=BTC python3 run.py
+SCALPER_ASSETS=ALL python3 run.py
 ```
 
 Dashboard: `http://127.0.0.1:8787` on the machine that is running `python3 run.py`. That address is not your phone or laptop unless the scalper is running there. In Cursor Cloud, open the forwarded **dashboard** port (8787) from the agent Ports panel.
@@ -46,7 +47,7 @@ The dashboard is interactive: flip each crypto market on/off, click a card for t
 ```bash
 export SCALPER_BANKROLL=1000
 export SCALPER_PORT=8787
-export SCALPER_ASSETS=BTC          # optional; comma list, default is all 7
+export SCALPER_ASSETS=BTC          # default; use ALL or BTC,ETH for more
 # required for the LIVE toggle
 # export KALSHI_API_KEY="your-key-id"
 # export KALSHI_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----..."
