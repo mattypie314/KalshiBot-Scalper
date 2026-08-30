@@ -64,9 +64,12 @@ The bot stays on the PC / Pi / VPS. The phone is only the dashboard.
 1. Keep `python3 run.py` (or the systemd unit) running on that machine.
 2. On the same Wi-Fi, open the **Phone (same Wi-Fi)** URL printed at startup — `http://<that-machine's-LAN-IP>:8787`. Windows: `ipconfig` → IPv4. Mac/Linux: `ip addr`, or just use the printed line.
 3. Type `SCALPER_DASHBOARD_TOKEN` once. The dashboard stores it on the phone so Safari/Chrome restarts keep you in.
-4. iPhone: Share → **Add to Home Screen**. Android: menu → **Add to Home screen**. It opens full-screen.
+4. **iPhone home-screen app (Safari only):** type the token first so the icon remembers it. Tap **Share** (the box with the arrow) → **Add to Home Screen** → **Add**. Open **Scalper** from the home screen, not from Safari — no address bar. Chrome on iPhone will not make a real home-screen app.
+5. Android: browser menu → **Add to Home screen**.
 
-Away from home: use Tailscale (or another VPN) and open `http://<tailscale-ip>:8787`. Do **not** port-forward `:8787` to the public internet.
+The board shows an **Add to Home Screen** tip on a phone until you dismiss it. Dismiss it after you add the icon.
+
+Away from home: use Tailscale (or another VPN) and open `http://<tailscale-ip>:8787`. Do **not** port-forward `:8787` to the public internet. If you add the home-screen icon on Wi-Fi (`http://192.168.x.x:8787`) it will not open over Tailscale — add a second icon from the Tailscale URL if you need both.
 
 Optional first-load bookmark on a **private** network: `http://192.168.x.x:8787/?token=YOUR_TOKEN`. The page saves the token and strips it from the address bar. Do not put a production token in a public or shared URL.
 

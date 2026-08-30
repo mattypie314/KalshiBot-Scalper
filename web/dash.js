@@ -11,6 +11,7 @@ const $ = (id) => document.getElementById(id);
     const TOKEN_KEY = "scalper_dash_token";
     const LOG_HIDDEN_KEY = "scalper_log_hidden";
     const RULES_KEY = "scalper_rules_bullets";
+    const A2HS_KEY = "scalper_a2hs_dismissed";
     const ui = { filter: "all", sort: "name", tape: "all", selected: null, last: null, rulesEditing: false };
 
     function logHidden() {
@@ -472,6 +473,47 @@ const $ = (id) => document.getElementById(id);
       renderRulesList(defaultRules(ui.last || {}));
     });
     applyLogHidden();
+    function queryFlag(name) {
+      try { return new URL(window.location.href).searchParams.get(name) === "1"; } catch (_) { return false; }
+    }
+    function isStandalone() {
+      try {
+        if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) return true;
+      } catch (_) {}
+      return window.navigator.standalone === true;
+    }
+    function isIosPhone() {
+      const ua = navigator.userAgent || "";
+      return /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    }
+    function applyStandaloneClass() {
+      if (isStandalone() || queryFlag("standalone")) document.documentElement.classList.add("standalone");
+    }
+    function showInstallHint() {
+      const hint = $("installHint");
+      if (!hint) return;
+      applyStandaloneClass();
+      if (document.documentElement.classList.contains("standalone")) {
+        hint.hidden = true;
+        return;
+      }
+      const force = queryFlag("install");
+      if (!force) {
+        try { if (localStorage.getItem(A2HS_KEY) === "1") { hint.hidden = true; return; } } catch (_) {}
+      }
+      const ios = isIosPhone();
+      const mobile = ios || /Android/i.test(navigator.userAgent || "");
+      if (!force && !mobile) { hint.hidden = true; return; }
+      $("installHintText").textContent = ios
+        ? "Safari: tap Share (the box with the arrow), then Add to Home Screen. Open the icon — no address bar."
+        : "Browser menu → Add to Home screen. Opens full-screen like an app.";
+      hint.hidden = false;
+    }
+    $("btnInstallDismiss").addEventListener("click", () => {
+      try { localStorage.setItem(A2HS_KEY, "1"); } catch (_) {}
+      $("installHint").hidden = true;
+    });
+    showInstallHint();
     document.addEventListener("keydown", (e) => {
       if (e.target && ["INPUT", "TEXTAREA"].includes(e.target.tagName)) return;
       const cards = (ui.last && ui.last.cards) || [];

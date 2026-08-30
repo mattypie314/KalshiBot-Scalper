@@ -98,6 +98,8 @@ class Handler(BaseHTTPRequestHandler):
                     ctype = "text/css; charset=utf-8"
                 elif candidate.suffix == ".svg":
                     ctype = "image/svg+xml"
+                elif candidate.suffix == ".png":
+                    ctype = "image/png"
                 elif candidate.suffix == ".webmanifest":
                     ctype = "application/manifest+json"
                 self._file(candidate, ctype, write_body=write_body)
