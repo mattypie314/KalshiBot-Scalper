@@ -7,6 +7,7 @@ import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 from .engine import Engine
 
@@ -30,13 +31,20 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args) -> None:  # noqa: A003
         return
 
+    def _query_token(self) -> str:
+        qs = parse_qs(urlparse(self.path).query)
+        vals = qs.get("token") or []
+        return (vals[0] if vals else "").strip()
+
     def _provided_token(self, payload: dict | None = None) -> str:
         hdr = (self.headers.get("X-Scalper-Token") or "").strip()
         if hdr:
             return hdr
         if payload and isinstance(payload, dict):
-            return str(payload.get("token") or "").strip()
-        return ""
+            body = str(payload.get("token") or "").strip()
+            if body:
+                return body
+        return self._query_token()
 
     def _token_ok(self, payload: dict | None = None) -> bool:
         need = (self.engine.cfg.dashboard_token or "").strip()
@@ -90,6 +98,10 @@ class Handler(BaseHTTPRequestHandler):
                     ctype = "text/css; charset=utf-8"
                 elif candidate.suffix == ".svg":
                     ctype = "image/svg+xml"
+                elif candidate.suffix == ".png":
+                    ctype = "image/png"
+                elif candidate.suffix == ".webmanifest":
+                    ctype = "application/manifest+json"
                 self._file(candidate, ctype, write_body=write_body)
                 return
         self.send_error(404)

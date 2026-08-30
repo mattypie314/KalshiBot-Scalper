@@ -725,6 +725,31 @@ def test_static_roughs_and_dash_js():
             html = resp.read().decode()
             assert "dash.js" in html
             assert "Outfit" in html or "SCALPER" in html
+            assert "viewport-fit=cover" in html
+            assert "apple-mobile-web-app-capable" in html
+            assert "/manifest.webmanifest" in html
+            assert "apple-touch-icon.png" in html
+            assert 'id="installHint"' in html
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/dash.js", timeout=3) as resp:
+            js = resp.read().decode()
+            assert "localStorage" in js
+            assert "captureUrlToken" in js
+            assert "showInstallHint" in js
+            assert "isStandalone" in js
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/manifest.webmanifest", timeout=3) as resp:
+            assert resp.status == 200
+            assert "manifest" in (resp.headers.get("Content-Type") or "")
+            man = resp.read().decode()
+            assert "standalone" in man
+            assert "icon-192.png" in man
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/icon.svg", timeout=3) as resp:
+            assert resp.status == 200
+            assert b"<svg" in resp.read()
+        for path in ("/apple-touch-icon.png", "/icon-180.png", "/icon-192.png", "/icon-512.png"):
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=3) as resp:
+                assert resp.status == 200
+                assert (resp.headers.get("Content-Type") or "").startswith("image/png")
+                assert resp.read()[:8] == b"\x89PNG\r\n\x1a\n"
     finally:
         httpd.shutdown()
         httpd.server_close()
@@ -776,9 +801,30 @@ def test_action_http_requires_token():
             snap = json.loads(resp.read().decode())
         assert snap["paused"] is True
         assert snap["dashboard_locked"] is True
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/state?token=lock", timeout=3) as resp:
+            via_q = json.loads(resp.read().decode())
+        assert via_q["paused"] is True
+        try:
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/api/state?token=wrong", timeout=3)
+            raise AssertionError("expected 401")
+        except urllib.error.HTTPError as e:
+            assert e.code == 401
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+def test_dashboard_urls_loopback_when_bound_local():
+    from scalper.netinfo import dashboard_urls, lan_ipv4s
+
+    assert dashboard_urls(8787, "127.0.0.1") == ["http://127.0.0.1:8787"]
+    wide = dashboard_urls(8787, "0.0.0.0")
+    assert wide[0] == "http://127.0.0.1:8787"
+    extra = lan_ipv4s()
+    if extra:
+        assert f"http://{extra[0]}:8787" in wide
+    else:
+        assert wide == ["http://127.0.0.1:8787"]
 
 
 def test_parse_asset_allowlist():
