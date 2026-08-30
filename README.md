@@ -80,7 +80,15 @@ The dashboard stays locked without the token. LIVE still requires typing `LIVE`,
 This Cursor Cloud box is **not** on your Wi-Fi. `http://127.0.0.1:8787` and any `172.30.…` address printed here will not load on the phone.
 
 1. On the **Pi / PC that runs the bot**, run `hostname -I` (or Windows `ipconfig`). You want a `192.168.…` or `10.…` address.
-2. Confirm the bot is up: `deploy/scalperctl.sh status` or look for `Scalper 3000 dashboard` in the terminal.
+2. Confirm the bot is up (you do not need `deploy/scalperctl.sh`):
+
+   ```bash
+   hostname -I
+   systemctl --user status kalshi-btc-scalper --no-pager || true
+   curl -sS -m 3 http://127.0.0.1:8787/health
+   ```
+
+   `hostname -I` should show a `192.168.…` or `10.…` address. Health should print `{"ok": true}`. If `curl` fails, start the bot from the repo: `python3 run.py` (or `python3 run_btc.py`).
 3. On the iPhone, **Safari** (not Chrome). Same Wi-Fi, not cellular, not a guest network.
 4. Type it exactly, including `http://` — Safari will fail or search if you omit it or use `https://`:
 
