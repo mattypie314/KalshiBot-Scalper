@@ -57,6 +57,11 @@
     .logo { font-weight: 700; letter-spacing: .12em; font-size: 13px; }
     .logo em { font-style: normal; color: var(--yes); text-shadow: 0 0 18px #3dff9a66; }
     .mode-toggle { display: flex; gap: 6px; align-items: center; }
+    #dashToken {
+      width: 110px; background: #0b0d12; color: var(--text); border: 1px solid var(--line);
+      border-radius: 7px; padding: 6px 8px; font-family: inherit; font-size: 11px;
+    }
+    #dashToken:focus { border-color: #a80; outline: none; }
     .pill { font-size: 10px; padding: 4px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); letter-spacing: .08em; }
     .pill.live { color: var(--yes); border-color: #1e5; box-shadow: 0 0 10px #3dff9a22; }
     .pill.warn { color: var(--amber); border-color: #a80; }
@@ -186,7 +191,9 @@
     <div class="mode-toggle">
       <button id="btnPaper" type="button">PAPER</button>
       <button id="btnLive" type="button" class="danger">LIVE</button>
+      <input id="dashToken" type="password" autocomplete="off" spellcheck="false" placeholder="token" hidden />
     </div>
+    <div class="pill" id="lock">OPEN</div>
     <div class="pill" id="mode">PAPER</div>
     <div class="pill" id="feed">FEED …</div>
     <div class="pill" id="armed">ARMED</div>
@@ -256,6 +263,7 @@
       <h2>REAL MONEY</h2>
       <p id="modeModalMsg">This sends limit IOCs to your Kalshi account. Type LIVE to confirm.</p>
       <input id="modeConfirm" autocomplete="off" spellcheck="false" placeholder="type LIVE" />
+      <input id="modeToken" type="password" autocomplete="off" spellcheck="false" placeholder="dashboard token" hidden />
       <div class="acts">
         <button type="button" class="danger" id="modeGo">GO LIVE</button>
         <button type="button" id="modeCancel">CANCEL</button>
@@ -268,7 +276,25 @@
     const fmt = (n, d=2) => n == null || Number.isNaN(n) ? "—" : Number(n).toLocaleString(undefined, {minimumFractionDigits:d, maximumFractionDigits:d});
     const money = (n) => n == null ? "—" : (n < 0 ? "-" : "") + "$" + fmt(Math.abs(n), 2);
     const clsPnl = (n) => n > 0.0001 ? "up" : n < -0.0001 ? "dn" : "flat";
+    const TOKEN_KEY = "scalper_dash_token";
     const ui = { filter: "all", sort: "name", tape: "all", selected: null, last: null };
+
+    function dashToken() {
+      const header = ($("dashToken") && $("dashToken").value) || "";
+      const modal = ($("modeToken") && $("modeToken").value) || "";
+      return (header || modal || sessionStorage.getItem(TOKEN_KEY) || "").trim();
+    }
+    function saveToken(value) {
+      const t = (value || "").trim();
+      if (t) sessionStorage.setItem(TOKEN_KEY, t);
+      if ($("dashToken") && t && !$("dashToken").value) $("dashToken").value = t;
+    }
+    function tokenHeaders(extra) {
+      const h = Object.assign({"Content-Type": "application/json"}, extra || {});
+      const t = dashToken();
+      if (t) h["X-Scalper-Token"] = t;
+      return h;
+    }
 
     function clock(s) {
       if (s == null) return "—";
@@ -419,11 +445,12 @@
       const payload = Object.assign({op}, typeof extra === "string" ? {asset: extra} : (extra || {}));
       const r = await fetch("/api/action", {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
+        headers: tokenHeaders(),
         body: JSON.stringify(payload),
       });
-      const j = await r.json();
-      if (!j.ok) $("feed").textContent = j.error || "ACTION FAILED";
+      const j = await r.json().catch(() => ({ok:false, error:"bad response"}));
+      if (r.status === 401) $("feed").textContent = "TOKEN REQUIRED";
+      else if (!j.ok) $("feed").textContent = j.error || "ACTION FAILED";
       await tick();
       return j;
     }
@@ -432,6 +459,8 @@
       $("modeConfirm").value = "";
       $("modeConfirm").hidden = !needType;
       $("modeGo").hidden = !needType;
+      $("modeToken").hidden = !needType;
+      if (needType) $("modeToken").value = dashToken();
       $("modeModal").hidden = false;
       if (needType) $("modeConfirm").focus();
     }
@@ -443,10 +472,24 @@
         openLiveModal(s.live_error || "Kalshi keys missing. Set KALSHI_API_KEY and KALSHI_PRIVATE_KEY.", false);
         return;
       }
+      if (!s.dashboard_locked) {
+        openLiveModal(s.live_error || "Set SCALPER_DASHBOARD_TOKEN before LIVE so anyone who can reach :8787 cannot arm real orders.", false);
+        return;
+      }
+      if (!dashToken()) {
+        openLiveModal("Dashboard is locked. Enter the SCALPER_DASHBOARD_TOKEN, then type LIVE.", true);
+        $("modeToken").focus();
+        return;
+      }
       openLiveModal("This spends real Kalshi cash with IOC limits at the touch. Flatten first if anything is open. Type LIVE to arm real-money mode (starts paused).", true);
     }
     async function confirmLive() {
       const typed = ($("modeConfirm").value || "").trim();
+      const tok = ($("modeToken").value || "").trim() || dashToken();
+      if (tok) {
+        saveToken(tok);
+        $("dashToken").value = tok;
+      }
       const j = await act("mode", {mode: "LIVE", confirm: typed});
       if (j && j.ok) closeLiveModal();
       else $("modeModalMsg").textContent = (j && j.error) || "could not go live";
@@ -470,6 +513,9 @@
       ui.last = s;
       $("mode").textContent = s.mode === "LIVE" ? "LIVE $ REAL" : "PAPER";
       $("mode").className = "pill " + (s.mode === "LIVE" ? "real" : "live");
+      $("lock").textContent = s.dashboard_locked ? "LOCKED" : "OPEN";
+      $("lock").className = "pill " + (s.dashboard_locked ? "warn" : "live");
+      $("dashToken").hidden = !s.dashboard_locked;
       $("btnPaper").className = s.mode !== "LIVE" ? "yes on" : "";
       $("btnLive").className = s.mode === "LIVE" ? "danger on" : "danger";
       $("feed").textContent = s.ws_ok ? "SPOT WS LIVE" : "SPOT REST";
@@ -514,8 +560,11 @@
       const r = s.rules || {};
       $("rules").innerHTML = [
         s.mode === "LIVE"
-          ? `REAL MONEY. IOC limits hit your Kalshi account.`
+          ? `REAL MONEY. IOC limits hit your Kalshi account. Exits are reduce-only.`
           : `PAPER. Same signals, no Kalshi orders.`,
+        s.dashboard_locked
+          ? `Dashboard token is on — actions and state require it.`
+          : `Dashboard is open. Set SCALPER_DASHBOARD_TOKEN before LIVE.`,
         `Watch live spot vs Kalshi Yes/No. Enter only a clear, fast mismatch.`,
         `Size ${r.size || "3–5% (cap 10%)"}. ${r.orders || "Limits only"}.`,
         `Out at ${r.target || "+4–8¢"} or ${r.dead || "when the edge dies"}.`,
@@ -524,8 +573,16 @@
     }
     async function tick() {
       try {
-        const r = await fetch("/api/state", {cache:"no-store"});
-        render(await r.json());
+        const r = await fetch("/api/state", {cache:"no-store", headers: tokenHeaders()});
+        const s = await r.json();
+        if (r.status === 401) {
+          $("feed").textContent = "TOKEN REQUIRED";
+          $("lock").textContent = "LOCKED";
+          $("lock").className = "pill warn";
+          $("dashToken").hidden = false;
+          return;
+        }
+        render(s);
       } catch (e) {
         $("feed").textContent = "DASHBOARD OFFLINE";
       }
@@ -566,6 +623,11 @@
     });
     $("btnLive").addEventListener("click", requestLive);
     $("modeCancel").addEventListener("click", closeLiveModal);
+    $("dashToken").value = sessionStorage.getItem(TOKEN_KEY) || "";
+    $("dashToken").addEventListener("change", () => { saveToken($("dashToken").value); tick(); });
+    $("dashToken").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { saveToken($("dashToken").value); tick(); }
+    });
     $("modeGo").addEventListener("click", confirmLive);
     $("modeConfirm").addEventListener("keydown", (e) => {
       if (e.key === "Enter") confirmLive();

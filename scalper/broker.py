@@ -64,14 +64,26 @@ class PaperBroker:
         self.fills.append(fill)
         return fill
 
-    def close(self, asset: str, price: float, fee: float, reason: str, is_taker: bool = True) -> dict | None:
-        pos = self.positions.pop(asset, None)
+    def close(
+        self,
+        asset: str,
+        price: float,
+        fee: float,
+        reason: str,
+        is_taker: bool = True,
+        qty: float | None = None,
+    ) -> dict | None:
+        pos = self.positions.get(asset)
         if not pos:
             return None
-        proceeds = price * pos.qty - fee
+        close_qty = pos.qty if qty is None else min(float(qty), pos.qty)
+        if close_qty < 1e-9:
+            return None
+        entry_fee_share = pos.fees * (close_qty / pos.qty) if pos.qty else 0.0
+        proceeds = price * close_qty - fee
         self.cash += proceeds
         self.fees_paid += fee
-        pnl = (price - pos.entry) * pos.qty - pos.fees - fee
+        pnl = (price - pos.entry) * close_qty - entry_fee_share - fee
         self.realized += pnl
         fill = Fill(
             ts=time.time(),
@@ -80,7 +92,7 @@ class PaperBroker:
             side=pos.side,
             action="sell",
             price=price,
-            qty=pos.qty,
+            qty=close_qty,
             fee=fee,
             is_taker=is_taker,
             reason=reason,
@@ -92,7 +104,7 @@ class PaperBroker:
             "ticker": pos.ticker,
             "kind": pos.kind,
             "side": pos.side,
-            "qty": pos.qty,
+            "qty": close_qty,
             "entry": pos.entry,
             "exit": price,
             "pnl": pnl,
@@ -100,6 +112,13 @@ class PaperBroker:
             "reason_in": pos.reason_in,
             "reason_out": reason,
             "ts": fill.ts,
+            "partial": close_qty + 1e-9 < pos.qty,
         }
         self.trades.append(rec)
+        remaining = pos.qty - close_qty
+        if remaining < 1e-9:
+            self.positions.pop(asset, None)
+        else:
+            pos.qty = remaining
+            pos.fees = max(0.0, pos.fees - entry_fee_share)
         return rec
