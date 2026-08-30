@@ -26,6 +26,10 @@ def main() -> None:
     for line in startup_lines(cfg.port, cfg.host):
         print(line, flush=True)
     print(f"Markets: {', '.join(cfg.assets)}", flush=True)
+    if engine.kalshi_api.ready:
+        print("Kalshi LIVE keys     ready", flush=True)
+    else:
+        print(f"Kalshi LIVE keys     {engine.live_error}", flush=True)
     print("PAPER mode. Limits only. 3–5% size. Out at +4–8¢ or when the edge dies.", flush=True)
     try:
         engine.loop()

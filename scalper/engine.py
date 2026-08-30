@@ -45,6 +45,7 @@ class Engine:
         self.cfg = cfg
         self.spots = SpotFeed(cfg.assets)
         self.kalshi = KalshiFeed()
+        self._kalshi_from_env = kalshi_api is None
         self.kalshi_api = kalshi_api if kalshi_api is not None else KalshiClient.from_env()
         self.paper = PaperBroker(cash=cfg.bankroll)
         self.live_book: PaperBroker | None = None
@@ -77,6 +78,20 @@ class Engine:
 
     def note(self, msg: str, level: str = "info", **extra: Any) -> None:
         self.log.appendleft({"ts": time.time(), "level": level, "msg": msg, **extra})
+
+    def _try_load_kalshi_creds(self) -> None:
+        if self.kalshi_api.ready:
+            return
+        load_dotenv()
+        creds, reason = creds_status()
+        self.live_error = reason
+        if not creds:
+            return
+        transport = getattr(self.kalshi_api, "transport", None)
+        base = getattr(self.kalshi_api, "base", "") or ""
+        self.kalshi_api = KalshiClient(creds, transport=transport, base=base)
+        self.live_error = ""
+        self.note("Kalshi keys loaded. Dashboard can toggle PAPER ↔ LIVE.")
 
     def _arm_temp_loose(self) -> None:
         """Loosen entry gates until equity drops by SCALPER_TEMP_LOOSE_LOSS dollars."""
@@ -502,14 +517,8 @@ class Engine:
                     "live_ready": self.kalshi_api.ready,
                 }
             if not self.kalshi_api.ready:
-                load_dotenv()
-                creds, reason = creds_status()
-                if creds:
-                    self.kalshi_api = KalshiClient(
-                        creds, transport=self.kalshi_api.transport, base=self.kalshi_api.base
-                    )
-                else:
-                    self.live_error = reason
+                self._try_load_kalshi_creds()
+                if not self.kalshi_api.ready:
                     return {"ok": False, "error": self.live_error, "live_ready": False}
             if not (self.cfg.dashboard_token or "").strip():
                 self.live_error = (
@@ -747,6 +756,8 @@ class Engine:
         }
 
     def state(self) -> dict:
+        if self._kalshi_from_env and not self.kalshi_api.ready:
+            self._try_load_kalshi_creds()
         now = time.time()
         with self._lock:
             cards = []

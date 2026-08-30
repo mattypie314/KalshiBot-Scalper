@@ -48,6 +48,35 @@ def _key_id_from_env() -> str:
     ).strip()
 
 
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+
+def _resolve_pem_path(path: str) -> Path:
+    raw = Path(path).expanduser()
+    if raw.is_file():
+        return raw
+    if not raw.is_absolute():
+        alt = (_repo_root() / path).resolve()
+        if alt.is_file():
+            return alt
+    return raw
+
+
+def _default_pem_paths() -> list[Path]:
+    secrets = _repo_root() / ".secrets"
+    found: list[Path] = []
+    for name in ("kalshi_live.pem", "kalshi.pem", "kalshi_demo.pem"):
+        p = secrets / name
+        if p.is_file() and p not in found:
+            found.append(p)
+    if secrets.is_dir():
+        for p in sorted(secrets.glob("*.pem")):
+            if p not in found:
+                found.append(p)
+    return found
+
+
 def creds_status() -> tuple[KalshiCreds | None, str]:
     """Return creds, or a specific reason LIVE cannot arm. Never includes PEM bytes."""
     key_id = _key_id_from_env()
@@ -55,8 +84,14 @@ def creds_status() -> tuple[KalshiCreds | None, str]:
     path = (os.environ.get("KALSHI_PRIVATE_KEY_PATH") or "").strip()
     pem_file: Path | None = None
     if not pem and path:
-        pem_file = Path(path).expanduser()
+        pem_file = _resolve_pem_path(path)
         if pem_file.is_file():
+            pem = pem_file.read_text().strip()
+    if not pem and not path:
+        defaults = _default_pem_paths()
+        if defaults:
+            pem_file = defaults[0]
+            path = str(pem_file)
             pem = pem_file.read_text().strip()
     if not key_id and not pem and not path:
         return None, (

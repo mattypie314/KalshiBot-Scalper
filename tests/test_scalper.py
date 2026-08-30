@@ -415,7 +415,17 @@ def test_live_toggle_requires_confirm_and_keys(monkeypatch):
     from scalper.engine import Engine
     from scalper.kalshi_api import KalshiClient
 
+    for k in (
+        "KALSHI_API_KEY",
+        "KALSHI_API_KEY_ID",
+        "KALSHI_ACCESS_KEY",
+        "KALSHI_KEY_ID",
+        "KALSHI_PRIVATE_KEY",
+        "KALSHI_PRIVATE_KEY_PATH",
+    ):
+        monkeypatch.delenv(k, raising=False)
     monkeypatch.setattr("scalper.engine.load_dotenv", lambda *a, **k: None)
+    monkeypatch.setattr("scalper.kalshi_api._default_pem_paths", lambda: [])
     eng = Engine(ScalperConfig(), kalshi_api=KalshiClient(None))
     snap = eng.state()
     assert snap["mode"] == "PAPER"
@@ -459,6 +469,12 @@ def test_creds_status_explains_missing_pem_path(tmp_path, monkeypatch):
     creds, err = creds_status()
     assert creds is not None
     assert creds.key_id == "kid-1"
+    assert err == ""
+
+    monkeypatch.delenv("KALSHI_PRIVATE_KEY_PATH", raising=False)
+    monkeypatch.setattr("scalper.kalshi_api._default_pem_paths", lambda: [pem])
+    creds, err = creds_status()
+    assert creds is not None
     assert err == ""
 
 
@@ -964,6 +980,11 @@ def test_load_dotenv_does_not_override_env(tmp_path, monkeypatch):
     assert load_dotenv(p) == p
     assert os.environ["SCALPER_DOTENV_TEST"] == "from-file"
     assert os.environ["SCALPER_DOTENV_KEEP"] == "from-env"
+    monkeypatch.setenv("SCALPER_DOTENV_EMPTY", "")
+    p.write_text("SCALPER_DOTENV_EMPTY=from-file\nexport SCALPER_DOTENV_EXPORT=ok\n")
+    assert load_dotenv(p) == p
+    assert os.environ["SCALPER_DOTENV_EMPTY"] == "from-file"
+    assert os.environ["SCALPER_DOTENV_EXPORT"] == "ok"
     assert load_dotenv(tmp_path / "missing.env") is None
 
 

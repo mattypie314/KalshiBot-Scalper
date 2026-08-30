@@ -78,26 +78,42 @@ KALSHI_PRIVATE_KEY_PATH=/home/mkubit/KalshiBot-Scalper/.secrets/kalshi_live.pem
 # leave KALSHI_API_BASE unset for real cash
 ```
 
-Then restart the bot (`systemctl --user restart kalshi-btc-scalper` or Ctrl-C and `python3 run.py`). Safe check (prints yes/no, not the key):
+If the board still says keys are missing, the **running** process has not loaded them. Check files first (prints set/empty only):
 
 ```bash
 cd ~/KalshiBot-Scalper
 python3 - <<'PY'
-import os, sys
 from pathlib import Path
-sys.path.insert(0, str(Path(".").resolve()))
-from scalper.envfile import load_dotenv
-from scalper.kalshi_api import creds_status
-load_dotenv()
-creds, err = creds_status()
-print("ready", bool(creds))
-print("api_key_set", bool((os.environ.get("KALSHI_API_KEY") or "").strip()))
-path = (os.environ.get("KALSHI_PRIVATE_KEY_PATH") or "").strip()
-print("pem_path_set", bool(path))
-print("pem_file_exists", Path(path).expanduser().is_file() if path else False)
-print("error", err or "ok")
+p = Path(".env")
+print("env_exists", p.is_file())
+if p.is_file():
+    for line in p.read_text().splitlines():
+        s = line.strip()
+        if not s or s.startswith("#") or "=" not in s:
+            continue
+        k, _, v = s.partition("=")
+        k = k.strip()
+        if k.lower().startswith("export "):
+            k = k[7:].strip()
+        if "KALSHI" in k:
+            val = v.strip().strip("'").strip('"')
+            print(k, "EMPTY" if not val else f"set len={len(val)}")
+secrets = Path(".secrets")
+print("pem_files", [x.name for x in secrets.glob("*.pem")] if secrets.is_dir() else "no .secrets dir")
 PY
 ```
+
+You need `KALSHI_API_KEY` **set** (the UUID) and a `.pem` in `.secrets/`. Then restart the process the phone is talking to:
+
+```bash
+systemctl --user restart kalshi-btc-scalper || true
+# if that unit is not installed, stop the old python3 run.py, then:
+export KALSHI_API_KEY='your-key-id-uuid'
+export KALSHI_PRIVATE_KEY_PATH="$HOME/KalshiBot-Scalper/.secrets/kalshi_live.pem"
+python3 run.py
+```
+
+Startup should print `Kalshi LIVE keys     ready`. Do not put the PEM body in `.env`.
 
 ## Phone
 

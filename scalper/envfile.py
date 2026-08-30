@@ -17,7 +17,10 @@ def load_dotenv(path: str | Path | None = None) -> Path | None:
             continue
         key, _, value = line.partition("=")
         key = key.strip()
+        if key.lower().startswith("export "):
+            key = key[7:].strip()
         value = value.strip().strip("'").strip('"')
-        if key and key not in os.environ:
+        # Empty shell/systemd values do not block .env (KALSHI_API_KEY= is common).
+        if key and not (os.environ.get(key) or "").strip():
             os.environ[key] = value
     return p
