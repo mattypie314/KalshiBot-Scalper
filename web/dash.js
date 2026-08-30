@@ -72,15 +72,41 @@ const $ = (id) => document.getElementById(id);
       }
     }
 
+    function readStoredToken() {
+      try {
+        const local = (localStorage.getItem(TOKEN_KEY) || "").trim();
+        if (local) return local;
+      } catch (_) {}
+      try {
+        return (sessionStorage.getItem(TOKEN_KEY) || "").trim();
+      } catch (_) {
+        return "";
+      }
+    }
     function dashToken() {
       const header = ($("dashToken") && $("dashToken").value) || "";
       const modal = ($("modeToken") && $("modeToken").value) || "";
-      return (header || modal || sessionStorage.getItem(TOKEN_KEY) || "").trim();
+      return (header || modal || readStoredToken()).trim();
     }
     function saveToken(value) {
       const t = (value || "").trim();
-      if (t) sessionStorage.setItem(TOKEN_KEY, t);
+      if (t) {
+        try { localStorage.setItem(TOKEN_KEY, t); } catch (_) {}
+        try { sessionStorage.setItem(TOKEN_KEY, t); } catch (_) {}
+      }
       if ($("dashToken") && t && !$("dashToken").value) $("dashToken").value = t;
+    }
+    function captureUrlToken() {
+      try {
+        const u = new URL(window.location.href);
+        const t = (u.searchParams.get("token") || "").trim();
+        if (!t) return;
+        saveToken(t);
+        if ($("dashToken")) $("dashToken").value = t;
+        u.searchParams.delete("token");
+        const qs = u.searchParams.toString();
+        history.replaceState({}, "", u.pathname + (qs ? "?" + qs : "") + u.hash);
+      } catch (_) {}
     }
     function tokenHeaders(extra) {
       const h = Object.assign({"Content-Type": "application/json"}, extra || {});
@@ -396,7 +422,8 @@ const $ = (id) => document.getElementById(id);
     });
     $("btnLive").addEventListener("click", requestLive);
     $("modeCancel").addEventListener("click", closeLiveModal);
-    $("dashToken").value = sessionStorage.getItem(TOKEN_KEY) || "";
+    captureUrlToken();
+    $("dashToken").value = readStoredToken();
     $("dashToken").addEventListener("change", () => { saveToken($("dashToken").value); tick(); });
     $("dashToken").addEventListener("keydown", (e) => {
       if (e.key === "Enter") { saveToken($("dashToken").value); tick(); }

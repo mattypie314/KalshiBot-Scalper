@@ -38,7 +38,7 @@ All seven markets:
 SCALPER_ASSETS=ALL python3 run.py
 ```
 
-Dashboard: `http://127.0.0.1:8787` on the machine that is running `python3 run.py`. That address is not your phone or laptop unless the scalper is running there. In Cursor Cloud, open the forwarded **dashboard** port (8787) from the agent Ports panel.
+Dashboard: `http://127.0.0.1:8787` on the machine that is running `python3 run.py`. That address is not your phone or laptop unless the scalper is running there. In Cursor Cloud, open the forwarded **dashboard** port (8787) from the agent Ports panel. Startup also prints a **Phone (same Wi-Fi)** URL when the bot is bound to `0.0.0.0` (the default).
 
 The dashboard is interactive: flip each crypto market on/off, click a card for the book / venues / sparkline, filter and sort the board, pause new entries, flatten a position, and toggle **PAPER ↔ LIVE**. Keyboard: `1–7` select, `P` pause, `M` mute, `F` flatten.
 
@@ -56,6 +56,21 @@ export SCALPER_ASSETS=BTC          # default; use ALL or BTC,ETH for more
 ```
 
 `python3 run.py` also reads a local `.env` if present (not committed). Use that for demo keys. Leave `KALSHI_API_BASE` unset for real cash.
+
+## Phone
+
+The bot stays on the PC / Pi / VPS. The phone is only the dashboard.
+
+1. Keep `python3 run.py` (or the systemd unit) running on that machine.
+2. On the same Wi-Fi, open the **Phone (same Wi-Fi)** URL printed at startup — `http://<that-machine's-LAN-IP>:8787`. Windows: `ipconfig` → IPv4. Mac/Linux: `ip addr`, or just use the printed line.
+3. Type `SCALPER_DASHBOARD_TOKEN` once. The dashboard stores it on the phone so Safari/Chrome restarts keep you in.
+4. iPhone: Share → **Add to Home Screen**. Android: menu → **Add to Home screen**. It opens full-screen.
+
+Away from home: use Tailscale (or another VPN) and open `http://<tailscale-ip>:8787`. Do **not** port-forward `:8787` to the public internet.
+
+Optional first-load bookmark on a **private** network: `http://192.168.x.x:8787/?token=YOUR_TOKEN`. The page saves the token and strips it from the address bar. Do not put a production token in a public or shared URL.
+
+The dashboard stays locked without the token. LIVE still requires typing `LIVE`, then Resume.
 
 ## Tests
 

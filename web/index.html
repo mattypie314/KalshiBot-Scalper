@@ -2,7 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0c0f0d" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Scalper" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
   <title>Scalper 3000</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -38,6 +46,7 @@
       font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer;
       background: transparent; color: var(--text); border: 1px solid var(--line);
       border-radius: 999px; padding: 8px 14px; transition: .15s ease;
+      touch-action: manipulation;
     }
     button:hover { border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.03); }
     button.yes { color: var(--yes); border-color: rgba(34,197,94,.35); }
@@ -173,8 +182,39 @@
     header .stats > div:nth-child(n+5) { opacity: .7; }
     .toolbar[data-chrome="filters"] { opacity: .85; }
     @media (max-width: 720px) {
-      header .stats > div:not(:has(#pnlBox)):not(:has(#eq)):not(:has(#cash)) { display: none; }
+      header .stats > div:not(:has(#pnlBox)):not(:has(#eq)):not(:has(#cash)):not(:has(#open)) { display: none; }
       .tune .hint, .toolbar .hint { display: none; }
+      html, body { font-size: 15px; }
+      header {
+        padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px;
+        gap: 8px;
+      }
+      main { padding: 14px 14px calc(40px + env(safe-area-inset-bottom, 0px)); }
+      .mode-toggle { flex-wrap: wrap; width: 100%; }
+      .mode-toggle button { flex: 1; min-height: 44px; }
+      #dashToken {
+        flex: 1 1 140px; width: auto; min-width: 120px; min-height: 44px;
+        font-size: 16px; /* iOS: avoid input zoom */
+      }
+      button { min-height: 40px; padding: 10px 14px; font-size: 13px; }
+      .pill { font-size: 12px; padding: 6px 10px; }
+      .stats { width: 100%; gap: 10px; }
+      #pnlBox #pnl { font-size: 16px; }
+      .markets, .tune, .toolbar { width: 100%; }
+      .toolbar button, .tune .meter { flex: 1 1 auto; }
+      .tune .meter button { min-width: 44px; min-height: 40px; }
+      .sw { min-width: 48px; min-height: 36px; padding: 8px 12px; font-size: 12px; }
+      .spot { font-size: 34px; }
+      .quotes { gap: 8px; }
+      .q { padding: 10px 8px; }
+      .q .v { font-size: 16px; }
+      .acts button { flex: 1; min-height: 44px; }
+      .fills-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      table th:nth-child(5), table td:nth-child(5),
+      table th:nth-child(6), table td:nth-child(6) { display: none; }
+      .rough-tag { display: none; }
+      .modal { padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px)); }
+      .modal input { font-size: 16px; min-height: 44px; }
     }
   </style>
 </head>
@@ -264,7 +304,7 @@
       </div>
       <div class="card">
         <h2>FILLS</h2>
-        <div style="overflow:auto">
+        <div class="fills-wrap" style="overflow:auto">
           <table>
             <thead><tr><th>asset</th><th>side</th><th>qty</th><th>in</th><th>out</th><th>hold</th><th>pnl</th><th>why</th></tr></thead>
             <tbody id="fills"></tbody>
