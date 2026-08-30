@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from .config import KALSHI_BASE
+from .config import kalshi_base
 from .fees import taker_fee
 
 UA = "ScottyScalper3000/1.0"
@@ -139,7 +139,7 @@ class KalshiClient:
     def __init__(self, creds: KalshiCreds | None = None, transport: Transport | None = None, base: str = "") -> None:
         self.creds = creds
         self.transport = transport or _default_transport
-        self.base = (base or KALSHI_BASE).rstrip("/")
+        self.base = (base or kalshi_base()).rstrip("/")
 
     @classmethod
     def from_env(cls) -> "KalshiClient":

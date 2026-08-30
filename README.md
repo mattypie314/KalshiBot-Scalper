@@ -54,6 +54,8 @@ export SCALPER_ASSETS=BTC          # optional; comma list, default is all 7
 # optional: export KALSHI_API_BASE=https://external-api.demo.kalshi.co/trade-api/v2
 ```
 
+`python3 run.py` also reads a local `.env` if present (not committed). Use that for demo keys. Leave `KALSHI_API_BASE` unset for real cash.
+
 ## Tests
 
 ```bash

@@ -5,6 +5,19 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
+from .envfile import load_dotenv
+
+__all__ = [
+    "ASSETS",
+    "KALSHI_BASE",
+    "kalshi_base",
+    "ScalperConfig",
+    "asset_for_ticker",
+    "load_config",
+    "load_dotenv",
+    "parse_asset_allowlist",
+]
+
 
 ASSETS = {
     "BTC": {
@@ -76,9 +89,13 @@ ASSETS = {
 ASSETS["DOGE"]["index"] = "DOGerti"
 
 
-KALSHI_BASE = os.environ.get(
-    "KALSHI_API_BASE", "https://external-api.kalshi.com/trade-api/v2"
-)
+def kalshi_base() -> str:
+    return os.environ.get(
+        "KALSHI_API_BASE", "https://external-api.kalshi.com/trade-api/v2"
+    ).rstrip("/")
+
+
+KALSHI_BASE = kalshi_base()
 COINBASE_REST = "https://api.exchange.coinbase.com"
 COINBASE_WS = "wss://ws-feed.exchange.coinbase.com"
 KRAKEN_REST = "https://api.kraken.com/0/public/Ticker"
@@ -87,7 +104,7 @@ BITSTAMP_REST = "https://www.bitstamp.net/api/v2/ticker"
 
 @dataclass
 class ScalperConfig:
-    bankroll: float = float(os.environ.get("SCALPER_BANKROLL", "1000"))
+    bankroll: float = 1000.0
     risk_frac: float = 0.04  # 4% of bankroll, inside 3–5%
     risk_frac_min: float = 0.03
     risk_frac_max: float = 0.05
@@ -113,10 +130,10 @@ class ScalperConfig:
     one_trade_per_window: bool = True
     min_top_depth_frac: float = 0.25  # never take more than 25% of visible size
     poll_s: float = 0.8
-    live: bool = os.environ.get("SCALPER_LIVE", "0") in {"1", "true", "TRUE", "yes"}
-    host: str = os.environ.get("SCALPER_HOST", "0.0.0.0")
-    port: int = int(os.environ.get("SCALPER_PORT", "8787"))
-    dashboard_token: str = os.environ.get("SCALPER_DASHBOARD_TOKEN", "").strip()
+    live: bool = False
+    host: str = "0.0.0.0"
+    port: int = 8787
+    dashboard_token: str = ""
     fee_multiplier: float = 1.0
     maker_fee_multiplier: float = 0.0  # resting crypto 15m is typically maker-free
     assets: dict = field(default_factory=lambda: dict(ASSETS))
@@ -162,4 +179,11 @@ def parse_asset_allowlist(raw: str | None = None) -> dict:
 
 
 def load_config() -> ScalperConfig:
-    return ScalperConfig(assets=parse_asset_allowlist())
+    return ScalperConfig(
+        bankroll=float(os.environ.get("SCALPER_BANKROLL", "1000")),
+        live=os.environ.get("SCALPER_LIVE", "0") in {"1", "true", "TRUE", "yes"},
+        host=os.environ.get("SCALPER_HOST", "0.0.0.0"),
+        port=int(os.environ.get("SCALPER_PORT", "8787")),
+        dashboard_token=os.environ.get("SCALPER_DASHBOARD_TOKEN", "").strip(),
+        assets=parse_asset_allowlist(),
+    )
