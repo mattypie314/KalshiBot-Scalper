@@ -12,7 +12,7 @@ const $ = (id) => document.getElementById(id);
     const LOG_HIDDEN_KEY = "scalper_log_hidden";
     const RULES_KEY = "scalper_rules_bullets";
     const A2HS_KEY = "scalper_a2hs_dismissed";
-    const ui = { filter: "all", sort: "name", tape: "all", selected: null, last: null, rulesEditing: false };
+    const ui = { filter: "all", sort: "name", tape: "all", selected: null, last: null, rulesEditing: false, authed: false };
 
     function logHidden() {
       const v = localStorage.getItem(LOG_HIDDEN_KEY);
@@ -249,14 +249,20 @@ const $ = (id) => document.getElementById(id);
     }
     function closeLiveModal() { $("modeModal").hidden = true; }
     async function requestLive() {
-      const s = ui.last || {};
-      if (s.mode === "LIVE") return;
-      if (!dashToken()) {
-        openLiveModal("Dashboard is locked. Enter the SCALPER_DASHBOARD_TOKEN in the token box, then type LIVE.", true);
+      const tickRes = await tick();
+      if (tickRes && tickRes.offline) {
+        openLiveModal("Phone cannot reach the bot. Same Wi-Fi, http:// not https://.", false);
+        return;
+      }
+      if (!tickRes || !tickRes.auth) {
+        openLiveModal("Dashboard is locked. Enter SCALPER_DASHBOARD_TOKEN in the token box, then tap LIVE again.", true);
         $("dashToken").hidden = false;
+        $("modeToken").hidden = false;
         $("modeToken").focus();
         return;
       }
+      const s = ui.last || {};
+      if (s.mode === "LIVE") return;
       if (!s.live_ready) {
         openLiveModal(s.live_error || "Kalshi keys missing. Set KALSHI_API_KEY and KALSHI_PRIVATE_KEY_PATH.", false);
         return;
@@ -370,18 +376,22 @@ const $ = (id) => document.getElementById(id);
         const r = await fetch("/api/state", {cache:"no-store", headers: tokenHeaders()});
         const s = await r.json();
         if (r.status === 401) {
+          ui.authed = false;
           $("feed").textContent = "TOKEN";
           $("lock").textContent = "LOCKED";
           $("lock").className = "pill warn";
           $("dashToken").hidden = false;
           showReachHelp(null);
-          return;
+          return {ok: false, auth: false};
         }
+        ui.authed = true;
         showReachHelp(null);
         render(s);
+        return {ok: true, auth: true};
       } catch (e) {
         $("feed").textContent = "OFFLINE";
         showReachHelp("offline");
+        return {ok: false, offline: true};
       }
     }
     $("markets").addEventListener("click", (e) => {

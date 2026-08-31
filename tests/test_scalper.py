@@ -840,6 +840,7 @@ def test_static_roughs_and_dash_js():
             assert "showInstallHint" in js
             assert "isStandalone" in js
             assert "showReachHelp" in js
+            assert "Dashboard is locked" in js
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/manifest.webmanifest", timeout=3) as resp:
             assert resp.status == 200
             assert "manifest" in (resp.headers.get("Content-Type") or "")
