@@ -74,6 +74,7 @@
     .pill.live { color: var(--yes); background: rgba(34,197,94,.1); }
     .pill.warn { color: var(--amber); background: rgba(234,179,8,.1); }
     .pill.real { color: var(--no); background: rgba(239,68,68,.12); }
+    a.pill { text-decoration: none; color: var(--yes); }
     .stats { display: flex; flex-wrap: wrap; gap: 16px; margin-left: auto; font-size: 12px; color: var(--dim); align-items: center; }
     .stats b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
     .up { color: var(--yes); } .dn { color: var(--no); } .flat { color: var(--dim); }
@@ -268,6 +269,7 @@
     <div class="pill" id="armed">ARMED</div>
     <div class="pill" id="loosePill" hidden>LOOSE</div>
     <button id="btnPause" type="button">PAUSE</button>
+    <a class="pill" id="botLink" href="/bot">KALSHI BOT</a>
     <div class="stats">
       <div>EQ <b id="eq">—</b></div>
       <div>CASH <b id="cash">—</b></div>
@@ -321,7 +323,17 @@
       <button type="button" data-sort="spread">SPREAD</button>
       <div class="hint">1–7 · P pause · F flatten</div>
     </section>
-    <section class="grid" id="cards"></section>
+    <section class="card" id="campaignCard">
+      <div class="row">
+        <h2>KALSHI BOT</h2>
+        <a href="/bot">desk →</a>
+      </div>
+      <div class="sub" id="campaignMeta">campaign book from github.com/mattypie314/KalshiBot</div>
+      <div class="stats" id="campaignStats" style="margin:10px 0 0"></div>
+      <div class="sub" id="campaignWarn" style="margin-top:8px;color:var(--amber)">Do not run KalshiBot 15m LIVE on BTC while this scalper is LIVE.</div>
+      <div class="log" id="campaignLog" style="margin-top:8px"></div>
+    </section>
+    <section class="grid" id="cards"></section
     <section class="detail" id="detail" hidden></section>
     <section class="bottom">
       <div class="card">

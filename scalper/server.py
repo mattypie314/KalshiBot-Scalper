@@ -10,6 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from .campaign_status import snapshot as campaign_snapshot
 from .engine import Engine
 
 WEB = Path(__file__).resolve().parent.parent / "web"
@@ -77,6 +78,19 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/health":
             self._json(200, {"ok": True}, write_body=write_body)
+            return
+        if path in {"/bot", "/bot/"}:
+            self._file(WEB / "bot.html", "text/html; charset=utf-8", write_body=write_body)
+            return
+        if path == "/api/campaign":
+            if not self._token_ok():
+                self._json(
+                    401,
+                    {"ok": False, "error": "dashboard token required", "dashboard_locked": True},
+                    write_body=write_body,
+                )
+                return
+            self._json(200, campaign_snapshot(), write_body=write_body)
             return
         # Static assets under web/ (dash.js, roughs/*.html). Never escape WEB.
         if path.startswith("/web/"):

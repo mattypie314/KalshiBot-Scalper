@@ -155,6 +155,30 @@ This Cursor Cloud box is **not** on your Wi-Fi. `http://127.0.0.1:8787` and any 
 5. If Safari asks for **Local Network**, allow it. Settings → Privacy & Security → Local Network → Safari on.
 6. Delete any home-screen icon you added from the wrong URL. Add a new one only after this page actually loads.
 
+## KalshiBot (the other repo)
+
+[KalshiBot](https://github.com/mattypie314/KalshiBot) is the campaign + research desk: 15m **post-only** Pass/Fail at the open of the window, hourly crypto/commodities, last-3-minute maker, plus Crypto / Commodities / Sports tabs.
+
+This scalper is a different 15m loop (IOC lag scalp). **Do not run both 15m LIVE on BTC at the same time.** They fight the same book.
+
+The dashboard has a **KALSHI BOT** card (reads `~/.kalshi/crypto-campaign.json` or `TRACKER_PATH`) and a **desk** page at `/bot` that loads KalshiBot on port 8000.
+
+On the Pi, next to this repo:
+
+```bash
+git clone https://github.com/mattypie314/KalshiBot.git ~/KalshiBot
+cd ~/KalshiBot
+python3 -m pip install -r requirements.txt
+# same Key ID + PEM as the scalper; KalshiBot wants KALSHI_API_KEY_ID
+export KALSHI_API_KEY_ID="$KALSHI_API_KEY"
+export KALSHI_PRIVATE_KEY_PATH="$HOME/KalshiBot-Scalper/.secrets/kalshi_live.pem"
+python3 -m kalshibot serve --host 0.0.0.0 --port 8000
+# optional campaign scheduler (keep KALSHI_LIVE unset until you mean it):
+# python3 -m kalshibot campaign run
+```
+
+Phone: `http://192.168.x.x:8787/bot` after the desk is up, or tap **KALSHI BOT** on the scalper.
+
 ## Tests
 
 ```bash

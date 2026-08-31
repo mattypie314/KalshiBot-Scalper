@@ -834,6 +834,8 @@ def test_static_roughs_and_dash_js():
             assert 'id="installHint"' in html
             assert 'id="reachHelp"' in html
             assert 'id="unlockGate"' in html
+            assert 'id="campaignCard"' in html
+            assert "/bot" in html
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/dash.js", timeout=3) as resp:
             js = resp.read().decode()
             assert "localStorage" in js
@@ -848,6 +850,10 @@ def test_static_roughs_and_dash_js():
             man = resp.read().decode()
             assert "standalone" in man
             assert "icon-192.png" in man
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/bot", timeout=3) as resp:
+            bot = resp.read().decode()
+            assert "KalshiBot" in bot
+            assert ":8000" in bot
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/icon.svg", timeout=3) as resp:
             assert resp.status == 200
             assert b"<svg" in resp.read()
@@ -940,6 +946,31 @@ def test_dashboard_urls_loopback_when_bound_local():
     assert bound[0] == "Scalper 3000 dashboard  http://127.0.0.1:8787"
     assert any("Phone cannot open" in line for line in bound)
     assert not any(line.startswith("Phone (same Wi-Fi)") for line in bound)
+
+
+def test_campaign_snapshot_reads_tracker(tmp_path, monkeypatch):
+    from scalper.campaign_status import snapshot, tracker_path
+
+    missing = tmp_path / "nope.json"
+    monkeypatch.setenv("TRACKER_PATH", str(missing))
+    empty = snapshot()
+    assert empty["present"] is False
+    assert empty["ok"] is False
+    book = tmp_path / "crypto-campaign.json"
+    book.write_text(
+        '{"bankroll": 40, "realized": 1.25, "tickets": [{"status": "open", "ticker": "X"}],'
+        ' "rests": [], "log": ["hello"], "sizing": {"halted": true, "maker_auto": false}}'
+    )
+    monkeypatch.setenv("TRACKER_PATH", str(book))
+    assert tracker_path() == book
+    snap = snapshot()
+    assert snap["ok"] is True
+    assert snap["present"] is True
+    assert snap["bankroll"] == 40
+    assert snap["halted"] is True
+    assert snap["maker_auto"] is False
+    assert len(snap["open_tickets"]) == 1
+    assert "fight" in snap["warn"]
 
 
 def test_parse_asset_allowlist():

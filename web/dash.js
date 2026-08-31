@@ -372,6 +372,32 @@ const $ = (id) => document.getElementById(id);
       ).join("") || `<tr><td colspan="8" class="flat">no fills yet</td></tr>`;
       if (!ui.rulesEditing) renderRulesList(loadRules(s));
     }
+    function renderCampaign(c) {
+      if (!$("campaignStats")) return;
+      if (!c || !c.present) {
+        $("campaignMeta").textContent = (c && c.error) || "KalshiBot campaign file not on this Pi yet";
+        $("campaignStats").innerHTML = "";
+        $("campaignLog").textContent = "";
+        return;
+      }
+      const halted = c.halted ? "HALTED · " : "";
+      $("campaignMeta").textContent = halted + "book " + money(c.bankroll) + " · realized " + signedMoney(c.realized);
+      $("campaignStats").innerHTML =
+        `<div>OPEN <b>${(c.open_tickets || []).length}</b></div>` +
+        `<div>RESTS <b>${(c.rests || []).length}</b></div>` +
+        `<div>MAKER <b>${c.maker_auto ? "ON" : "OFF"}</b></div>`;
+      $("campaignLog").innerHTML = (c.log || []).slice(0, 8).map((x) => {
+        const msg = typeof x === "string" ? x : (x && (x.msg || x.message)) || JSON.stringify(x);
+        return `<div>${String(msg).replace(/</g, "&lt;")}</div>`;
+      }).join("");
+    }
+    async function tickCampaign() {
+      try {
+        const r = await fetch("/api/campaign", {cache: "no-store", headers: tokenHeaders()});
+        if (r.status === 401) return;
+        renderCampaign(await r.json());
+      } catch (_) {}
+    }
     async function tick() {
       try {
         const r = await fetch("/api/state", {cache:"no-store", headers: tokenHeaders()});
@@ -393,6 +419,7 @@ const $ = (id) => document.getElementById(id);
         if ($("unlockGate")) $("unlockGate").hidden = true;
         showReachHelp(null);
         render(s);
+        tickCampaign();
         return {ok: true, auth: true};
       } catch (e) {
         $("feed").textContent = "OFFLINE";
