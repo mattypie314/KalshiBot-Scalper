@@ -368,6 +368,11 @@ def test_action_http_roundtrip():
         health = urllib.request.Request(f"http://127.0.0.1:{port}/health", method="HEAD")
         with urllib.request.urlopen(health, timeout=3) as resp:
             assert resp.status == 200
+        try:
+            serve(eng, "127.0.0.1", port)
+            raise AssertionError("expected port-in-use SystemExit")
+        except SystemExit as e:
+            assert "already in use" in str(e)
     finally:
         httpd.shutdown()
         httpd.server_close()

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hmac
 import json
 import threading
+import errno
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -151,7 +152,16 @@ class Handler(BaseHTTPRequestHandler):
 
 def serve(engine: Engine, host: str, port: int) -> ThreadingHTTPServer:
     Handler.engine = engine
-    httpd = ThreadingHTTPServer((host, port), Handler)
+    try:
+        httpd = ThreadingHTTPServer((host, port), Handler)
+    except OSError as e:
+        if e.errno == errno.EADDRINUSE:
+            raise SystemExit(
+                f"Port {port} is already in use. The phone is talking to that process.\n"
+                "Do not start a second python3 run.py.\n"
+                "Restart the one that is up:  systemctl --user restart kalshi-btc-scalper"
+            ) from e
+        raise
     t = threading.Thread(target=httpd.serve_forever, name="http", daemon=True)
     t.start()
     return httpd
