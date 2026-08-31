@@ -58,6 +58,7 @@ function deskSrc() {
   const proto = location.protocol === "https:" ? "https:" : "http:";
   return proto + "//" + host + ":8000/";
 }
+let startTried = false;
 function render(c) {
   if (!c || !c.present) {
     $("campaignMeta").textContent = (c && c.error) || "Campaign file not on this Pi yet.";
@@ -79,6 +80,8 @@ function render(c) {
   const iframe = $("desk");
   const hint = $("deskHint");
   const status = $("statusLine");
+  const startBtn = $("btnStart");
+  if (startBtn) startBtn.hidden = !!up;
   if (up) {
     iframe.hidden = false;
     if (!iframe.src) iframe.src = deskSrc();
@@ -88,9 +91,44 @@ function render(c) {
   } else {
     iframe.hidden = true;
     iframe.removeAttribute("src");
-    hint.textContent = "Desk is down. On the Pi: python3 run_kalshi15.py  (port 8000). Leave KALSHI_LIVE unset unless you mean it.";
-    status.textContent = "KALSHI15 desk is not running yet.";
+    hint.textContent = (c && c.error) || "Desk is down. Tap Start KALSHI15, or on the Pi: python3 run_kalshi15.py";
+    status.textContent = (c && c.error) || "KALSHI15 desk is not running yet.";
     status.className = "status down";
+  }
+}
+async function startDesk() {
+  const startBtn = $("btnStart");
+  if (startBtn) {
+    startBtn.disabled = true;
+    startBtn.textContent = "Starting…";
+  }
+  $("statusLine").textContent = "Starting KALSHI15…";
+  $("statusLine").className = "status";
+  try {
+    const headers = Object.assign({"Content-Type": "application/json"}, tokenHeaders());
+    const r = await fetch("/api/kalshi15", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({op: "start"}),
+    });
+    if (r.status === 401) {
+      showUnlock("Unlock first, then tap Start.");
+      return;
+    }
+    const c = await r.json();
+    render(c);
+    if (!c.ok && c.error) {
+      $("statusLine").textContent = c.error;
+      $("statusLine").className = "status down";
+    }
+  } catch (_) {
+    $("statusLine").textContent = "Could not start. On the Pi: python3 run_kalshi15.py";
+    $("statusLine").className = "status down";
+  } finally {
+    if (startBtn) {
+      startBtn.disabled = false;
+      startBtn.textContent = "Start KALSHI15";
+    }
   }
 }
 async function tick() {
@@ -103,7 +141,12 @@ async function tick() {
       return;
     }
     hideUnlock();
-    render(await r.json());
+    const c = await r.json();
+    render(c);
+    if (!startTried && !c.desk_up) {
+      startTried = true;
+      startDesk();
+    }
   } catch (_) {
     $("statusLine").textContent = "Phone cannot reach the board.";
     $("statusLine").className = "status down";
@@ -122,6 +165,7 @@ if ($("unlockToken")) {
     if (e.key === "Enter") submitUnlock();
   });
 }
+if ($("btnStart")) $("btnStart").addEventListener("click", startDesk);
 if (!readStoredToken()) showUnlock();
 tick();
 setInterval(tick, 4000);

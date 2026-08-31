@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, urlparse
 
 from .engine import Engine
 from .kalshi15 import board as kalshi15_board
+from .kalshi15 import start_desk as kalshi15_start
 
 WEB = Path(__file__).resolve().parent.parent / "web"
 
@@ -124,11 +125,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
         self.send_error(404)
 
-    def do_POST(self) -> None:  # noqa: N802
-        path = self.path.split("?", 1)[0]
-        if path != "/api/action":
-            self.send_error(404)
-            return
+    def _read_payload(self) -> dict | None:
         raw = self.rfile.read(int(self.headers.get("Content-Length") or 0) or 0)
         try:
             payload = json.loads(raw.decode() or "{}")
@@ -136,6 +133,29 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("payload must be an object")
         except (ValueError, UnicodeDecodeError) as e:
             self._json(400, {"ok": False, "error": str(e)})
+            return None
+        return payload
+
+    def do_POST(self) -> None:  # noqa: N802
+        path = self.path.split("?", 1)[0]
+        if path in {"/api/kalshi15", "/api/campaign"}:
+            payload = self._read_payload()
+            if payload is None:
+                return
+            if not self._token_ok(payload):
+                self._json(401, {"ok": False, "error": "dashboard token required", "dashboard_locked": True})
+                return
+            op = str(payload.get("op") or "start").strip().lower()
+            if op != "start":
+                self._json(400, {"ok": False, "error": "op must be start"})
+                return
+            self._json(200, kalshi15_start())
+            return
+        if path != "/api/action":
+            self.send_error(404)
+            return
+        payload = self._read_payload()
+        if payload is None:
             return
         if not self._token_ok(payload):
             self._json(401, {"ok": False, "error": "dashboard token required", "dashboard_locked": True})

@@ -38,8 +38,9 @@ def main() -> None:
     print(f"KALSHI15 desk          http://127.0.0.1:{port}", flush=True)
     print("Leave KALSHI_LIVE unset unless you mean campaign orders.", flush=True)
     print("Do not arm SCALPER real money on BTC at the same time.", flush=True)
+    os.environ["PYTHONPATH"] = str(bot) + os.pathsep + os.environ.get("PYTHONPATH", "")
     cmd = [sys.executable, "-m", "kalshibot", "serve", "--host", host, "--port", port]
-    code = subprocess.call(cmd, cwd=str(bot))
+    code = subprocess.call(cmd, cwd=str(bot), env=os.environ)
     if code != 0:
         print("If that said No module named kalshibot:", flush=True)
         print(f"  cd {bot} && python3 -m pip install -r requirements.txt", flush=True)

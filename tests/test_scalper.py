@@ -869,6 +869,7 @@ def test_static_roughs_and_dash_js():
             assert 'id="campaignCard"' in k15
             assert "k15.js" in k15
             assert "8000" in k15
+            assert 'id="btnStart"' in k15
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/bot", timeout=3) as resp:
             bot = resp.read().decode()
             assert "KALSHI15" in bot
@@ -877,6 +878,7 @@ def test_static_roughs_and_dash_js():
             kjs = resp.read().decode()
             assert "TOKEN_KEY" in kjs
             assert ":8000" in kjs
+            assert "startDesk" in kjs
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/icon.svg", timeout=3) as resp:
             assert resp.status == 200
             assert b"<svg" in resp.read()
@@ -1015,6 +1017,71 @@ def test_kalshi15_find_root_and_board(tmp_path, monkeypatch):
     assert snap["name"] == "KALSHI15"
     assert snap["desk_up"] is False
     assert snap["present"] is False
+
+
+def test_kalshi15_start_missing_root_and_already_up(tmp_path, monkeypatch):
+    import socket
+
+    from scalper.kalshi15 import start_desk
+
+    monkeypatch.setenv("KALSHI15_ROOT", str(tmp_path / "nope"))
+    missing = start_desk(wait=0.2)
+    assert missing["ok"] is False
+    assert missing["started"] is False
+    assert "KalshiBot" in missing["error"]
+
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.listen(1)
+    monkeypatch.setenv("KALSHI15_PORT", str(port))
+    try:
+        already = start_desk(wait=0.2)
+        assert already["ok"] is True
+        assert already["started"] is False
+        assert already["desk_up"] is True
+    finally:
+        sock.close()
+
+
+def test_kalshi15_start_http_requires_token_and_reports_missing_root(tmp_path, monkeypatch):
+    import json
+    import urllib.error
+    import urllib.request
+
+    from scalper.engine import Engine
+    from scalper.server import serve
+
+    monkeypatch.setenv("KALSHI15_ROOT", str(tmp_path / "nope"))
+    cfg = ScalperConfig()
+    cfg.dashboard_token = "lock"
+    httpd = serve(Engine(cfg), "127.0.0.1", 0)
+    port = httpd.server_address[1]
+    try:
+        bare = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/kalshi15",
+            data=json.dumps({"op": "start"}).encode(),
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            urllib.request.urlopen(bare, timeout=3)
+            raise AssertionError("expected 401")
+        except urllib.error.HTTPError as e:
+            assert e.code == 401
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/kalshi15",
+            data=json.dumps({"op": "start"}).encode(),
+            method="POST",
+            headers={"Content-Type": "application/json", "X-Scalper-Token": "lock"},
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            body = json.loads(resp.read().decode())
+        assert body["ok"] is False
+        assert "KalshiBot" in body["error"]
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
 
 
 def test_parse_asset_allowlist():

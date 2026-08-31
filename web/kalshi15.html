@@ -81,7 +81,10 @@
     <div class="stats" id="campaignStats"></div>
     <div class="log" id="campaignLog"></div>
   </section>
-  <p class="hint" id="deskHint">If the desk below is blank, start KALSHI15 on the Pi: python3 run_kalshi15.py (port 8000)</p>
+  <p class="hint" id="deskHint">KALSHI15 is a second process on port 8000. Tap Start, or on the Pi run: python3 run_kalshi15.py</p>
+  <div style="margin:0 14px 10px">
+    <button type="button" id="btnStart">Start KALSHI15</button>
+  </div>
   <iframe id="desk" title="KALSHI15 desk" hidden></iframe>
   <div class="unlock-back" id="unlockGate" hidden>
     <div class="unlock">
@@ -91,6 +94,6 @@
       <button type="button" id="btnUnlock">UNLOCK</button>
     </div>
   </div>
-  <script src="/k15.js?v=desk1"></script>
+  <script src="/k15.js?v=desk2"></script>
 </body>
 </html>
