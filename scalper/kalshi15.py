@@ -104,7 +104,7 @@ def serve_cmd(root: Path) -> list[str]:
 
 def _fail_hint(tail: str, root: Path) -> str:
     low = (tail or "").lower()
-    if "no module named uvicorn" in low or "no module named kalshibot" in low:
+    if "no module named" in low and ("uvicorn" in low or "kalshibot" in low):
         return f"Install KALSHI15 deps on the Pi: cd {root} && python3 -m pip install -r requirements.txt"
     if "address already in use" in low:
         return "Port 8000 is already in use. The desk may already be up."

@@ -1022,7 +1022,12 @@ def test_kalshi15_find_root_and_board(tmp_path, monkeypatch):
 def test_kalshi15_start_missing_root_and_already_up(tmp_path, monkeypatch):
     import socket
 
-    from scalper.kalshi15 import start_desk
+    from pathlib import Path
+
+    from scalper.kalshi15 import _fail_hint, start_desk
+
+    hint = _fail_hint("ModuleNotFoundError: No module named 'uvicorn'", Path("/tmp/KalshiBot"))
+    assert "pip install" in hint
 
     monkeypatch.setenv("KALSHI15_ROOT", str(tmp_path / "nope"))
     missing = start_desk(wait=0.2)
