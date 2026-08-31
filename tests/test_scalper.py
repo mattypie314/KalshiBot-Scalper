@@ -824,19 +824,31 @@ def test_static_roughs_and_dash_js():
                 body = resp.read()
                 assert len(body) > 100
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as resp:
+            home = resp.read().decode()
+            assert "KALSHI15" in home
+            assert "/scalper" in home
+            assert "/kalshi15" in home
+            assert "Outfit" in home or "SCALPER" in home
+            assert "viewport-fit=cover" in home
+            assert "apple-mobile-web-app-capable" in home
+            assert "/manifest.webmanifest" in home
+            assert "apple-touch-icon.png" in home
+            assert 'id="installHint"' in home
+            assert 'id="reachHelp"' in home
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/scalper", timeout=3) as resp:
             html = resp.read().decode()
             assert "dash.js" in html
-            assert "kalshibot1" in html
-            assert "Outfit" in html or "SCALPER" in html
+            assert "SCALPER" in html
             assert "viewport-fit=cover" in html
             assert "apple-mobile-web-app-capable" in html
-            assert "/manifest.webmanifest" in html
+            assert "/manifest-scalper.webmanifest" in html
             assert "apple-touch-icon.png" in html
             assert 'id="installHint"' in html
             assert 'id="reachHelp"' in html
             assert 'id="unlockGate"' in html
-            assert 'id="campaignCard"' in html
-            assert "/bot" in html
+            assert 'id="statusLine"' in html
+            assert 'id="btnMore"' in html
+            assert "campaignCard" not in html
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/dash.js", timeout=3) as resp:
             js = resp.read().decode()
             assert "localStorage" in js
@@ -851,10 +863,20 @@ def test_static_roughs_and_dash_js():
             man = resp.read().decode()
             assert "standalone" in man
             assert "icon-192.png" in man
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/kalshi15", timeout=3) as resp:
+            k15 = resp.read().decode()
+            assert "KALSHI15" in k15
+            assert 'id="campaignCard"' in k15
+            assert "k15.js" in k15
+            assert "8000" in k15
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/bot", timeout=3) as resp:
             bot = resp.read().decode()
-            assert "KalshiBot" in bot
-            assert ":8000" in bot
+            assert "KALSHI15" in bot
+            assert "8000" in bot
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/k15.js", timeout=3) as resp:
+            kjs = resp.read().decode()
+            assert "TOKEN_KEY" in kjs
+            assert ":8000" in kjs
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/icon.svg", timeout=3) as resp:
             assert resp.status == 200
             assert b"<svg" in resp.read()
@@ -972,6 +994,27 @@ def test_campaign_snapshot_reads_tracker(tmp_path, monkeypatch):
     assert snap["maker_auto"] is False
     assert len(snap["open_tickets"]) == 1
     assert "fight" in snap["warn"]
+
+
+def test_kalshi15_find_root_and_board(tmp_path, monkeypatch):
+    from scalper.kalshi15 import board, desk_up, find_root, looks_like_kalshibot
+
+    missing = tmp_path / "nope"
+    monkeypatch.setenv("KALSHI15_ROOT", str(missing))
+    monkeypatch.delenv("KALSHIBOT_ROOT", raising=False)
+    assert find_root() is None
+    assert looks_like_kalshibot(missing) is False
+    root = tmp_path / "KalshiBot"
+    (root / "kalshibot").mkdir(parents=True)
+    (root / "kalshibot" / "__init__.py").write_text("")
+    monkeypatch.setenv("KALSHI15_ROOT", str(root))
+    assert find_root() == root.resolve()
+    assert desk_up(port=1) is False
+    monkeypatch.setenv("TRACKER_PATH", str(tmp_path / "missing-book.json"))
+    snap = board()
+    assert snap["name"] == "KALSHI15"
+    assert snap["desk_up"] is False
+    assert snap["present"] is False
 
 
 def test_parse_asset_allowlist():

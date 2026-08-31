@@ -49,5 +49,5 @@ def snapshot() -> dict[str, Any]:
         "rests": rests,
         "log": log,
         "updated_at": data.get("updated_at"),
-        "warn": "Do not run KalshiBot 15m LIVE on BTC at the same time as this scalper LIVE. They fight the same book.",
+        "warn": "Do not run KALSHI15 LIVE on BTC at the same time as SCALPER LIVE. They fight the same book.",
     }

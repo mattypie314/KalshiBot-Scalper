@@ -10,8 +10,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from .campaign_status import snapshot as campaign_snapshot
 from .engine import Engine
+from .kalshi15 import board as kalshi15_board
 
 WEB = Path(__file__).resolve().parent.parent / "web"
 
@@ -60,7 +60,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def _dispatch(self, *, write_body: bool) -> None:
         path = self.path.split("?", 1)[0]
-        if path in {"/", "/index.html"}:
+        if path in {"/", "/desk", "/desk/"}:
+            self._file(WEB / "home.html", "text/html; charset=utf-8", write_body=write_body)
+            return
+        if path in {"/scalper", "/scalper/", "/index.html"}:
             self._file(WEB / "index.html", "text/html; charset=utf-8", write_body=write_body)
             return
         if path in {"/roughs", "/roughs/"}:
@@ -79,10 +82,10 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/health":
             self._json(200, {"ok": True}, write_body=write_body)
             return
-        if path in {"/bot", "/bot/"}:
-            self._file(WEB / "bot.html", "text/html; charset=utf-8", write_body=write_body)
+        if path in {"/bot", "/bot/", "/kalshi15", "/kalshi15/", "/k15", "/k15/"}:
+            self._file(WEB / "kalshi15.html", "text/html; charset=utf-8", write_body=write_body)
             return
-        if path == "/api/campaign":
+        if path in {"/api/campaign", "/api/kalshi15"}:
             if not self._token_ok():
                 self._json(
                     401,
@@ -90,7 +93,7 @@ class Handler(BaseHTTPRequestHandler):
                     write_body=write_body,
                 )
                 return
-            self._json(200, campaign_snapshot(), write_body=write_body)
+            self._json(200, kalshi15_board(), write_body=write_body)
             return
         # Static assets under web/ (dash.js, roughs/*.html). Never escape WEB.
         if path.startswith("/web/"):

@@ -114,6 +114,7 @@ def startup_lines(port: int, host: str = "0.0.0.0") -> list[str]:
         for extra in phone[1:]:
             lines.append(f"  also                  {extra}")
         lines.append("On the iPhone use that exact http:// URL in Safari. Not https. Not 127.0.0.1.")
+        lines.append("That page is the desk: pick SCALPER or KALSHI15. Do not run both LIVE on BTC.")
     else:
         lines.append("Phone cannot open this process. 127.0.0.1 and cloud/container IPs are this machine only.")
         lines.append("On the Pi/PC that is on your Wi-Fi: hostname -I   then Safari → http://THAT_IP:8787")

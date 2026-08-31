@@ -40,7 +40,9 @@ SCALPER_ASSETS=ALL python3 run.py
 
 Dashboard: `http://127.0.0.1:8787` on the machine that is running `python3 run.py`. That address is not your phone or laptop unless the scalper is running there. In Cursor Cloud, open the forwarded **dashboard** port (8787) from the agent Ports panel. Startup also prints a **Phone (same Wi-Fi)** URL when the bot is bound to `0.0.0.0` (the default).
 
-The dashboard is interactive: flip each crypto market on/off, click a card for the book / venues / sparkline, filter and sort the board, pause new entries, flatten a position, and toggle **PAPER ↔ LIVE**. Keyboard: `1–7` select, `P` pause, `M` mute, `F` flatten.
+`:8787` opens a **desk picker**. Choose **SCALPER** (this IOC scalp) or **KALSHI15** (the other bot). Do not mash them on one screen, and do not run both on real money against the same BTC 15m book.
+
+The SCALPER board is interactive: flip each market on/off, tap a card for the book, pause, flatten, and toggle **Practice ↔ Real money**. Keyboard: `1–7` select, `P` pause, `M` mute, `F` flatten.
 
 **PAPER** is the default. **LIVE** sends IOC limits to your Kalshi account. The toggle stays locked until `KALSHI_API_KEY` and `KALSHI_PRIVATE_KEY` (or `KALSHI_PRIVATE_KEY_PATH`) **and** `SCALPER_DASHBOARD_TOKEN` are set. Going live asks you to type `LIVE`, then starts **paused** so you have to resume before any real order goes out. Flatten paper positions before switching. Open Kalshi positions are imported (not ignored). Exits are `reduce_only` IOCs; a partial fill shrinks the local size and retries instead of pretending the whole clip is still open.
 
@@ -120,9 +122,9 @@ Startup should print `Kalshi LIVE keys     ready`. Do not put the PEM body in `.
 The bot stays on the PC / Pi / VPS. The phone is only the dashboard.
 
 1. Keep `python3 run.py` (or the systemd unit) running on that machine.
-2. On the same Wi-Fi, open the **Phone (same Wi-Fi)** URL printed at startup — `http://<that-machine's-LAN-IP>:8787`. Windows: `ipconfig` → IPv4. Mac/Linux: `ip addr`, or just use the printed line.
-3. Type `SCALPER_DASHBOARD_TOKEN` once. The dashboard stores it on the phone so Safari/Chrome restarts keep you in.
-4. **iPhone home-screen app (Safari only):** type the token first so the icon remembers it. Tap **Share** (the box with the arrow) → **Add to Home Screen** → **Add**. Open **Scalper** from the home screen, not from Safari — no address bar. Chrome on iPhone will not make a real home-screen app.
+2. On the same Wi-Fi, open the **Phone (same Wi-Fi)** URL printed at startup — `http://<that-machine's-LAN-IP>:8787`. That is the desk: pick **SCALPER** or **KALSHI15**. Windows: `ipconfig` → IPv4. Mac/Linux: `ip addr`, or just use the printed line.
+3. Type `SCALPER_DASHBOARD_TOKEN` once on the board you open. The dashboard stores it on the phone so Safari/Chrome restarts keep you in.
+4. **iPhone home-screen app (Safari only):** add the desk, or open SCALPER / KALSHI15 first and add that board. Tap **Share** → **Add to Home Screen**. Chrome on iPhone will not make a real home-screen app.
 5. Android: browser menu → **Add to Home screen**.
 
 The board shows an **Add to Home Screen** tip on a phone until you dismiss it. Dismiss it after you add the icon.
@@ -155,29 +157,32 @@ This Cursor Cloud box is **not** on your Wi-Fi. `http://127.0.0.1:8787` and any 
 5. If Safari asks for **Local Network**, allow it. Settings → Privacy & Security → Local Network → Safari on.
 6. Delete any home-screen icon you added from the wrong URL. Add a new one only after this page actually loads.
 
-## KalshiBot (the other repo)
+## Two instances: SCALPER or KALSHI15
 
-[KalshiBot](https://github.com/mattypie314/KalshiBot) is the campaign + research desk: 15m **post-only** Pass/Fail at the open of the window, hourly crypto/commodities, last-3-minute maker, plus Crypto / Commodities / Sports tabs.
+Phone `http://192.168.x.x:8787` is the desk. Pick one.
 
-This scalper is a different 15m loop (IOC lag scalp). **Do not run both 15m LIVE on BTC at the same time.** They fight the same book.
+| | SCALPER | KALSHI15 |
+| --- | --- | --- |
+| What | 15m IOC lag scalp vs spot | Campaign / post-only 15m, hourly, maker, sports |
+| Start | `python3 run.py` (or `kalshi-btc-scalper`) | `python3 run_kalshi15.py` (or `kalshi15` unit) |
+| Board | `http://…:8787/scalper` | `http://…:8787/kalshi15` |
+| Process port | dashboard `:8787` | desk `:8000` |
 
-The dashboard has a **KALSHI BOT** card (reads `~/.kalshi/crypto-campaign.json` or `TRACKER_PATH`) and a **desk** page at `/bot` that loads KalshiBot on port 8000.
+**Do not run both LIVE on BTC at the same time.** They fight the same book.
 
-On the Pi, next to this repo:
+[KalshiBot](https://github.com/mattypie314/KalshiBot) is the KALSHI15 repo. Clone it next to this one, then start the desk from *this* repo so it reuses the same `.env` / PEM:
 
 ```bash
 git clone https://github.com/mattypie314/KalshiBot.git ~/KalshiBot
-cd ~/KalshiBot
-python3 -m pip install -r requirements.txt
-# same Key ID + PEM as the scalper; KalshiBot wants KALSHI_API_KEY_ID
-export KALSHI_API_KEY_ID="$KALSHI_API_KEY"
-export KALSHI_PRIVATE_KEY_PATH="$HOME/KalshiBot-Scalper/.secrets/kalshi_live.pem"
-python3 -m kalshibot serve --host 0.0.0.0 --port 8000
+cd ~/KalshiBot && python3 -m pip install -r requirements.txt
+cd ~/KalshiBot-Scalper
+python3 run_kalshi15.py
+# optional: systemctl --user enable --now kalshi15
 # optional campaign scheduler (keep KALSHI_LIVE unset until you mean it):
-# python3 -m kalshibot campaign run
+# cd ~/KalshiBot && python3 -m kalshibot campaign run
 ```
 
-Phone: `http://192.168.x.x:8787/bot` after the desk is up, or tap **KALSHI BOT** on the scalper.
+`run_kalshi15.py` maps `KALSHI_API_KEY` → `KALSHI_API_KEY_ID` and looks for `~/KalshiBot` (or `KALSHI15_ROOT`). Old `/bot` URL still opens KALSHI15.
 
 ## Tests
 

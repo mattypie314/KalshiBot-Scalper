@@ -14,6 +14,38 @@ const $ = (id) => document.getElementById(id);
     const A2HS_KEY = "scalper_a2hs_dismissed";
     const ui = { filter: "all", sort: "name", tape: "all", selected: null, last: null, rulesEditing: false, authed: false };
 
+    function setStatus(kind, text) {
+      const el = $("statusLine");
+      if (!el) return;
+      el.textContent = text;
+      el.className = "status-line" + (kind ? " " + kind : "");
+    }
+    function showUnlock(msg) {
+      document.body.classList.add("board-locked");
+      if ($("unlockGate")) $("unlockGate").hidden = false;
+      if (msg && $("unlockMsg")) $("unlockMsg").textContent = msg;
+    }
+    function hideUnlock() {
+      document.body.classList.remove("board-locked");
+      if ($("unlockGate")) $("unlockGate").hidden = true;
+    }
+    function applyMore() {
+      const p = $("morePanel");
+      const b = $("btnMore");
+      if (!p || !b) return;
+      b.textContent = p.hidden ? "More" : "Hide extra";
+      b.classList.toggle("on", !p.hidden);
+    }
+    function statusFromState(s) {
+      if (s.mode === "LIVE") {
+        if (s.paused) return ["real", "REAL MONEY · paused. Resume sends IOC limits to Kalshi."];
+        if (s.open) return ["real", "REAL MONEY · " + s.open + " open. Flatten before you walk away."];
+        return ["real", "REAL MONEY · sending IOC limits when edge prints."];
+      }
+      if (s.paused) return ["", "Practice · paused. Same signals, no Kalshi orders."];
+      return ["", "Practice · watching. Kalshi is not getting orders."];
+    }
+
     function logHidden() {
       const v = localStorage.getItem(LOG_HIDDEN_KEY);
       if (v === null) return true; // default: quieter dashboard
@@ -152,8 +184,8 @@ const $ = (id) => document.getElementById(id);
         : "";
       const sigCls = hot ? "sig edge" : "sig";
       const sigTxt = hot
-        ? `${c.signal.kind} ${c.signal.side}  edge ${fmt(c.signal.edge,3)}  ${c.signal.reason}`
-        : (c.skip || "watching");
+        ? `Take ${String(c.signal.side || "").toUpperCase()} · ${fmt(c.signal.edge,3)} · ${c.signal.reason}`
+        : (c.skip || "No trade yet");
       const cls = ["card", hot ? "hot" : "", inPos ? "in" : "", c.muted ? "off" : "", ui.selected === c.asset ? "sel" : ""]
         .filter(Boolean).join(" ");
       return `<article class="${cls}" data-asset="${c.asset}">
@@ -233,8 +265,13 @@ const $ = (id) => document.getElementById(id);
         body: JSON.stringify(payload),
       });
       const j = await r.json().catch(() => ({ok:false, error:"bad response"}));
-      if (r.status === 401) $("feed").textContent = "TOKEN REQUIRED";
-      else if (!j.ok) $("feed").textContent = j.error || "ACTION FAILED";
+      if (r.status === 401) {
+        if ($("feed")) $("feed").textContent = "TOKEN REQUIRED";
+        setStatus("warn", "Board locked. Enter the password from the Pi .env (not the Kalshi key).");
+      } else if (!j.ok) {
+        if ($("feed")) $("feed").textContent = j.error || "ACTION FAILED";
+        setStatus("warn", j.error || "Action failed");
+      }
       await tick();
       return j;
     }
@@ -243,8 +280,8 @@ const $ = (id) => document.getElementById(id);
       $("modeConfirm").value = "";
       $("modeConfirm").hidden = !needType;
       $("modeGo").hidden = !needType;
-      $("modeToken").hidden = !needType;
-      if (needType) $("modeToken").value = dashToken();
+      if ($("modeToken")) $("modeToken").hidden = true;
+      if (needType && $("modeToken")) $("modeToken").value = dashToken();
       $("modeModal").hidden = false;
       if (needType) $("modeConfirm").focus();
     }
@@ -256,16 +293,14 @@ const $ = (id) => document.getElementById(id);
         return;
       }
       if (!tickRes || !tickRes.auth) {
-        openLiveModal("Dashboard is locked. Enter SCALPER_DASHBOARD_TOKEN in the token box, then tap LIVE again.", true);
-        $("dashToken").hidden = false;
-        $("modeToken").hidden = false;
-        $("modeToken").focus();
+        closeLiveModal();
+        showUnlock("Dashboard is locked. Unlock with the board password from the Pi .env — not the Kalshi Key ID. Then tap Real money again.");
         return;
       }
       const s = ui.last || {};
       if (s.mode === "LIVE") return;
       if (!s.live_ready) {
-        openLiveModal(s.live_error || "Kalshi keys missing. Set KALSHI_API_KEY and KALSHI_PRIVATE_KEY_PATH.", false);
+        openLiveModal(s.live_error || "Kalshi keys missing on the Pi. That is KALSHI_API_KEY + the PEM — not the board password.", false);
         return;
       }
       if (s.dashboard_locked === false) {
@@ -371,6 +406,8 @@ const $ = (id) => document.getElementById(id);
         </tr>`
       ).join("") || `<tr><td colspan="8" class="flat">no fills yet</td></tr>`;
       if (!ui.rulesEditing) renderRulesList(loadRules(s));
+      const stLine = statusFromState(s);
+      setStatus(stLine[0], stLine[1]);
     }
     function renderCampaign(c) {
       if (!$("campaignStats")) return;
@@ -404,25 +441,23 @@ const $ = (id) => document.getElementById(id);
         const s = await r.json();
         if (r.status === 401) {
           ui.authed = false;
-          $("feed").textContent = dashToken() ? "BAD TOKEN" : "TOKEN";
-          $("lock").textContent = "LOCKED";
-          $("lock").className = "pill warn";
-          $("dashToken").hidden = false;
-          if ($("unlockGate")) $("unlockGate").hidden = false;
-          if ($("unlockMsg") && dashToken()) {
-            $("unlockMsg").textContent = "Wrong token. That is not the Kalshi Key ID. Use SCALPER_DASHBOARD_TOKEN from the Pi .env.";
-          }
+          if ($("feed")) $("feed").textContent = dashToken() ? "BAD TOKEN" : "TOKEN";
+          if ($("lock")) { $("lock").textContent = "LOCKED"; $("lock").className = "pill warn"; }
+          showUnlock(dashToken()
+            ? "Wrong token. That is not the Kalshi Key ID. Use SCALPER_DASHBOARD_TOKEN from the Pi .env."
+            : "Type the board password from the Pi .env. Not the Kalshi Key ID.");
+          setStatus("warn", "Board locked. This password is not your Kalshi key.");
           showReachHelp(null);
           return {ok: false, auth: false};
         }
         ui.authed = true;
-        if ($("unlockGate")) $("unlockGate").hidden = true;
+        hideUnlock();
         showReachHelp(null);
         render(s);
-        tickCampaign();
         return {ok: true, auth: true};
       } catch (e) {
-        $("feed").textContent = "OFFLINE";
+        if ($("feed")) $("feed").textContent = "OFFLINE";
+        setStatus("warn", "Phone cannot reach SCALPER.");
         showReachHelp("offline");
         return {ok: false, offline: true};
       }
@@ -504,6 +539,15 @@ const $ = (id) => document.getElementById(id);
         if (ui.last) render(ui.last);
       });
     });
+    if ($("btnMore")) {
+      $("btnMore").addEventListener("click", () => {
+        const p = $("morePanel");
+        if (!p) return;
+        p.hidden = !p.hidden;
+        applyMore();
+      });
+      applyMore();
+    }
     $("btnLogToggle").addEventListener("click", () => setLogHidden(!logHidden()));
     $("btnRulesEdit").addEventListener("click", () => setRulesEditMode(true));
     $("btnRulesCancel").addEventListener("click", () => setRulesEditMode(false));
@@ -592,6 +636,9 @@ const $ = (id) => document.getElementById(id);
     });
     showInstallHint();
     showReachHelp(hostIsThisComputerOnly() ? "localhost" : null);
+    if (!readStoredToken()) {
+      showUnlock("Type the board password from the Pi .env. Not the Kalshi Key ID.");
+    }
     document.addEventListener("keydown", (e) => {
       if (e.target && ["INPUT", "TEXTAREA"].includes(e.target.tagName)) return;
       const cards = (ui.last && ui.last.cards) || [];

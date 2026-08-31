@@ -8,7 +8,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Scalper" />
-  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="manifest" href="/manifest-scalper.webmanifest" />
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
@@ -214,12 +214,25 @@
     html.standalone, html.standalone body { overscroll-behavior: none; min-height: 100dvh; }
     html.standalone .install-hint, html.standalone .rough-tag { display: none !important; }
     html.standalone header { padding-top: calc(12px + env(safe-area-inset-top, 0px)); }
+    .status-line {
+      width: 100%; font-size: 14px; line-height: 1.4; color: var(--text);
+      padding: 8px 0 0;
+    }
+    .status-line.real { color: var(--no); font-weight: 600; }
+    .chrome-pills { display: none; }
+    #dashToken { display: none !important; }
+    .more-panel { display: grid; gap: 14px; }
+    .more-panel[hidden] { display: none !important; }
+    body.board-locked main { visibility: hidden; }
+    a.desk-switch { font-size: 13px; color: var(--dim); text-decoration: none; border-bottom: 1px dashed var(--line); }
+    .status-line.warn { color: var(--amber); }
+    .stat-extra { color: var(--dim); }
 
     /* live streamlining */
     header .stats > div:nth-child(n+5) { opacity: .7; }
     .toolbar[data-chrome="filters"] { opacity: .85; }
     @media (max-width: 720px) {
-      header .stats > div:not(:has(#pnlBox)):not(:has(#eq)):not(:has(#cash)):not(:has(#open)) { display: none; }
+      header .stats .stat-extra { display: none; }
       .tune .hint, .toolbar .hint { display: none; }
       html, body { font-size: 15px; }
       header {
@@ -258,35 +271,45 @@
 <body>
   <header>
     <div class="logo">SCALPER <em>3000</em></div>
+    <a class="desk-switch" href="/">Desk</a>
     <div class="mode-toggle">
-      <button id="btnPaper" type="button">PAPER</button>
-      <button id="btnLive" type="button" class="danger">LIVE</button>
-      <input id="dashToken" type="password" autocomplete="off" spellcheck="false" placeholder="token" hidden />
+      <button id="btnPaper" type="button">Practice</button>
+      <button id="btnLive" type="button" class="danger">Real money</button>
+      <input id="dashToken" type="password" autocomplete="off" spellcheck="false" placeholder="board password" hidden />
     </div>
-    <div class="pill" id="lock">OPEN</div>
-    <div class="pill" id="mode">PAPER</div>
-    <div class="pill" id="feed">FEED …</div>
-    <div class="pill" id="armed">ARMED</div>
+    <div class="chrome-pills">
+      <div class="pill" id="lock">OPEN</div>
+      <div class="pill" id="mode">PAPER</div>
+      <div class="pill" id="feed">FEED …</div>
+      <div class="pill" id="armed">ARMED</div>
+    </div>
     <div class="pill" id="loosePill" hidden>LOOSE</div>
-    <button id="btnPause" type="button">PAUSE</button>
-    <a class="pill" id="botLink" href="/bot">KALSHI BOT</a>
+    <button id="btnPause" type="button">Pause</button>
+    <div class="status-line" id="statusLine">Unlock the board to see live prices.</div>
     <div class="stats">
-      <div>EQ <b id="eq">—</b></div>
-      <div>CASH <b id="cash">—</b></div>
+      <div class="stat-extra">EQ <b id="eq">—</b></div>
+      <div class="stat-extra">CASH <b id="cash">—</b></div>
       <div id="pnlBox" class="flat" title="session realized PnL">
         <span class="dir" id="pnlDir">FLAT</span>
         <b id="pnl">$0.00</b>
       </div>
-      <div>FEES <b id="fees">—</b></div>
-      <div>OPEN <b id="open">0</b></div>
-      <div>W/L <b id="wl">0/0</b></div>
-      <div>UP <b id="up">0:00</b></div>
-      <div>T <b id="tick">0</b></div>
+      <div class="stat-extra">FEES <b id="fees">—</b></div>
+      <div>Open <b id="open">0</b></div>
+      <div class="stat-extra">W/L <b id="wl">0/0</b></div>
+      <div class="stat-extra">UP <b id="up">0:00</b></div>
+      <div class="stat-extra">T <b id="tick">0</b></div>
     </div>
   </header>
   <main>
+    <section class="grid" id="cards"></section>
+    <section class="detail" id="detail" hidden></section>
+    <div class="toolbar">
+      <button type="button" id="btnMore">More</button>
+      <a class="desk-switch" href="/">← Desk</a>
+    </div>
+    <div class="more-panel" id="morePanel" hidden>
     <section class="markets">
-      <h2>MKTS</h2>
+      <h2>MARKETS</h2>
       <div class="mrail" id="markets"></div>
       <div class="toolbar">
         <button type="button" id="btnAllOn">ALL ON</button>
@@ -294,15 +317,15 @@
       </div>
     </section>
     <section class="tune" id="tuneBar">
-      <span class="sub">ENTRY</span>
+      <span class="sub">How picky</span>
       <div class="meter">
-        <span class="lab">σ</span>
+        <span class="lab">move</span>
         <button type="button" data-tune="sigma" data-dir="-1">−</button>
         <span class="val" id="tuneSigma">0.55</span>
         <button type="button" data-tune="sigma" data-dir="1">+</button>
       </div>
       <div class="meter">
-        <span class="lab">EDGE</span>
+        <span class="lab">edge</span>
         <button type="button" data-tune="edge" data-dir="-1">−</button>
         <span class="val" id="tuneEdge">0.040</span>
         <button type="button" data-tune="edge" data-dir="1">+</button>
@@ -323,18 +346,6 @@
       <button type="button" data-sort="spread">SPREAD</button>
       <div class="hint">1–7 · P pause · F flatten</div>
     </section>
-    <section class="card" id="campaignCard">
-      <div class="row">
-        <h2>KALSHI BOT</h2>
-        <a href="/bot">desk →</a>
-      </div>
-      <div class="sub" id="campaignMeta">campaign book from github.com/mattypie314/KalshiBot</div>
-      <div class="stats" id="campaignStats" style="margin:10px 0 0"></div>
-      <div class="sub" id="campaignWarn" style="margin-top:8px;color:var(--amber)">Do not run KalshiBot 15m LIVE on BTC while this scalper is LIVE.</div>
-      <div class="log" id="campaignLog" style="margin-top:8px"></div>
-    </section>
-    <section class="grid" id="cards"></section
-    <section class="detail" id="detail" hidden></section>
     <section class="bottom">
       <div class="card">
         <div class="row">
@@ -350,6 +361,9 @@
         </div>
         <div class="log-body" id="logBody"><div class="log" id="log"></div></div>
       </div>
+    </section>
+    </div>
+    <section class="bottom">
       <div class="card">
         <h2>FILLS</h2>
         <div class="fills-wrap" style="overflow:auto">
@@ -374,9 +388,9 @@
   </main>
   <div class="unlock-back" id="unlockGate" hidden>
     <div class="unlock">
-      <h2>DASHBOARD LOCK</h2>
-      <p id="unlockMsg">This is not the Kalshi API key. On the Pi run: sed -n 's/^SCALPER_DASHBOARD_TOKEN=//p' .env — type that value here.</p>
-      <input id="unlockToken" type="password" autocomplete="off" spellcheck="false" placeholder="SCALPER_DASHBOARD_TOKEN" />
+      <h2>BOARD PASSWORD</h2>
+      <p id="unlockMsg">Type SCALPER_DASHBOARD_TOKEN from the Pi .env. Not the Kalshi Key ID (the 36-character UUID).</p>
+      <input id="unlockToken" type="password" autocomplete="off" spellcheck="false" placeholder="board password" />
       <div class="acts">
         <button type="button" class="yes" id="btnUnlock">UNLOCK</button>
       </div>
@@ -403,6 +417,6 @@
     <button type="button" id="btnInstallDismiss">GOT IT</button>
   </div>
   <div class="rough-tag"><a href="/roughs/">design roughs</a></div>
-  <script src="/dash.js?v=kalshibot1"></script>
+  <script src="/dash.js?v=desk1"></script>
 </body>
 </html>

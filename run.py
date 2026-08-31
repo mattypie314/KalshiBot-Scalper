@@ -31,6 +31,7 @@ def main() -> None:
     else:
         print(f"Kalshi LIVE keys     {engine.live_error}", flush=True)
     print("PAPER mode. Limits only. 3–5% size. Out at +4–8¢ or when the edge dies.", flush=True)
+    print("Desk picker: SCALPER or KALSHI15. This process is SCALPER.", flush=True)
     try:
         engine.loop()
     except KeyboardInterrupt:
