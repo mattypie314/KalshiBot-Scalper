@@ -826,6 +826,7 @@ def test_static_roughs_and_dash_js():
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as resp:
             html = resp.read().decode()
             assert "dash.js" in html
+            assert "kalshibot1" in html
             assert "Outfit" in html or "SCALPER" in html
             assert "viewport-fit=cover" in html
             assert "apple-mobile-web-app-capable" in html

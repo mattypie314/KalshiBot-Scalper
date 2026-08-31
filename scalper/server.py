@@ -157,6 +157,8 @@ class Handler(BaseHTTPRequestHandler):
         data = p.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", ctype)
+        if "html" in ctype or "javascript" in ctype or "css" in ctype:
+            self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(data) if write_body else 0))
         self.send_header("Connection", "close")
         self.end_headers()
