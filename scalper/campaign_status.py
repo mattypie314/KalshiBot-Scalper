@@ -22,7 +22,7 @@ def snapshot() -> dict[str, Any]:
             "ok": False,
             "present": False,
             "tracker_path": str(path),
-            "error": "KalshiBot campaign file not found. On the Pi: clone github.com/mattypie314/KalshiBot and run python -m kalshibot campaign run",
+            "error": "KALSHI15 campaign file not found. Clone github.com/mattypie314/KalshiBot to ~/KalshiBot, then python3 run_kalshi15.py",
         }
     try:
         data = json.loads(path.read_text() or "{}")
