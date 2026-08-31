@@ -1,7 +1,7 @@
 {
-  "name": "Desk",
-  "short_name": "Desk",
-  "start_url": "/",
+  "name": "KALSHI15",
+  "short_name": "KALSHI15",
+  "start_url": "/kalshi15",
   "scope": "/",
   "display": "standalone",
   "background_color": "#0c0f0d",
@@ -20,7 +20,7 @@
       "purpose": "any"
     },
     {
-      "src": "/icon.svg",
+      "src": "/icon-k15.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"

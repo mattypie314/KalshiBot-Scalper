@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0c0f0d" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="KALSHI15" />
+  <link rel="manifest" href="/manifest-kalshi15.webmanifest" />
+  <link rel="icon" href="/icon-k15.svg" type="image/svg+xml" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <title>KALSHI15</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c0f0d; --panel: #161b17; --text: #f2f5f2; --dim: #8b968c;
+      --yes: #22c55e; --amber: #eab308; --no: #ef4444; --line: rgba(255,255,255,.08);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: "Outfit", ui-sans-serif, sans-serif; }
+    header {
+      padding: calc(12px + env(safe-area-inset-top, 0px)) 14px 12px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(12,15,13,.9);
+    }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .logo { font-weight: 700; letter-spacing: .1em; color: var(--amber); }
+    a { color: var(--yes); text-decoration: none; }
+    .status { margin-top: 8px; font-size: 14px; line-height: 1.4; }
+    .status.down { color: var(--amber); }
+    .card {
+      margin: 12px 14px 0; padding: 14px 16px; background: var(--panel);
+      border: 1px solid var(--line); border-radius: 16px;
+    }
+    .card h2 { margin: 0 0 6px; font-size: 11px; letter-spacing: .12em; color: var(--dim); }
+    .sub { color: var(--dim); font-size: 13px; line-height: 1.4; }
+    .stats { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; font-size: 13px; color: var(--dim); }
+    .stats b { color: var(--text); }
+    .log { margin-top: 10px; max-height: 120px; overflow: auto; font-size: 12px; color: var(--dim); line-height: 1.45; }
+    .hint { margin: 12px 14px; font-size: 13px; color: var(--amber); line-height: 1.4; }
+    iframe { border: 0; width: 100%; height: calc(100% - 220px); min-height: 280px; background: var(--bg); }
+    .unlock-back {
+      position: fixed; inset: 0; z-index: 25; background: rgba(0,0,0,.82);
+      display: grid; place-items: center; padding: 20px;
+    }
+    .unlock-back[hidden] { display: none !important; }
+    .unlock {
+      width: min(420px, 100%); background: var(--panel); border: 1px solid var(--line);
+      border-radius: 20px; padding: 22px;
+    }
+    .unlock h2 { margin: 0 0 8px; letter-spacing: .08em; font-size: 12px; color: var(--amber); }
+    .unlock p { margin: 0 0 12px; font-size: 14px; line-height: 1.45; }
+    .unlock input {
+      width: 100%; background: rgba(0,0,0,.3); color: var(--text); border: 1px solid var(--line);
+      border-radius: 12px; padding: 12px; font-family: inherit; font-size: 16px; margin-bottom: 10px;
+    }
+    button {
+      font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+      background: transparent; color: var(--yes); border: 1px solid rgba(34,197,94,.35);
+      border-radius: 999px; padding: 10px 14px; min-height: 40px;
+    }
+    #campaignCard { /* hook for tests */ }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="row">
+      <div class="logo">KALSHI15</div>
+      <a href="/">← Desk</a>
+    </div>
+    <div class="status" id="statusLine">Campaign desk. Not the IOC scalper.</div>
+  </header>
+  <section class="card" id="campaignCard">
+    <h2>CAMPAIGN</h2>
+    <div class="sub" id="campaignMeta">Waiting for the board password…</div>
+    <div class="stats" id="campaignStats"></div>
+    <div class="log" id="campaignLog"></div>
+  </section>
+  <p class="hint" id="deskHint">KALSHI15 is a second process on port 8000. Tap Start, or on the Pi run: python3 run_kalshi15.py</p>
+  <div style="margin:0 14px 10px">
+    <button type="button" id="btnStart">Start KALSHI15</button>
+  </div>
+  <iframe id="desk" title="KALSHI15 desk" hidden></iframe>
+  <div class="unlock-back" id="unlockGate" hidden>
+    <div class="unlock">
+      <h2>BOARD PASSWORD</h2>
+      <p id="unlockMsg">Same password as SCALPER (SCALPER_DASHBOARD_TOKEN on the Pi). Not the Kalshi Key ID.</p>
+      <input id="unlockToken" type="password" autocomplete="off" spellcheck="false" placeholder="board password" />
+      <button type="button" id="btnUnlock">UNLOCK</button>
+    </div>
+  </div>
+  <script src="/k15.js?v=desk2"></script>
+</body>
+</html>

@@ -15,7 +15,8 @@ from .broker import PaperBroker, Position
 from .config import ScalperConfig, asset_for_ticker
 from .fees import taker_fee
 from .feeds import KalshiFeed, MarketSnap, SpotFeed
-from .kalshi_api import KalshiClient, LiveFill
+from .envfile import load_dotenv
+from .kalshi_api import KalshiClient, LiveFill, creds_status
 from .model import SpotHistory, Tick, VolState, fair_yes, vol_from_closes
 from .risk import RiskState, allow_entry, size_contracts
 from .signals import Signal, evaluate, exit_reason
@@ -44,6 +45,7 @@ class Engine:
         self.cfg = cfg
         self.spots = SpotFeed(cfg.assets)
         self.kalshi = KalshiFeed()
+        self._kalshi_from_env = kalshi_api is None
         self.kalshi_api = kalshi_api if kalshi_api is not None else KalshiClient.from_env()
         self.paper = PaperBroker(cash=cfg.bankroll)
         self.live_book: PaperBroker | None = None
@@ -60,7 +62,7 @@ class Engine:
         self.muted: set[str] = set()
         self._lock = threading.Lock()
         self.mode = "PAPER"
-        self.live_error = "" if self.kalshi_api.ready else "Kalshi keys missing. Set KALSHI_API_KEY and KALSHI_PRIVATE_KEY."
+        self.live_error = "" if self.kalshi_api.ready else creds_status()[1]
         self._temp_loose = False
         self._temp_loose_baseline: float | None = None
         self._temp_loose_saved: tuple[float, float] | None = None
@@ -76,6 +78,20 @@ class Engine:
 
     def note(self, msg: str, level: str = "info", **extra: Any) -> None:
         self.log.appendleft({"ts": time.time(), "level": level, "msg": msg, **extra})
+
+    def _try_load_kalshi_creds(self) -> None:
+        if self.kalshi_api.ready:
+            return
+        load_dotenv()
+        creds, reason = creds_status()
+        self.live_error = reason
+        if not creds:
+            return
+        transport = getattr(self.kalshi_api, "transport", None)
+        base = getattr(self.kalshi_api, "base", "") or ""
+        self.kalshi_api = KalshiClient(creds, transport=transport, base=base)
+        self.live_error = ""
+        self.note("Kalshi keys loaded. Dashboard can toggle PAPER ↔ LIVE.")
 
     def _arm_temp_loose(self) -> None:
         """Loosen entry gates until equity drops by SCALPER_TEMP_LOOSE_LOSS dollars."""
@@ -501,8 +517,9 @@ class Engine:
                     "live_ready": self.kalshi_api.ready,
                 }
             if not self.kalshi_api.ready:
-                self.live_error = "Kalshi keys missing. Set KALSHI_API_KEY and KALSHI_PRIVATE_KEY."
-                return {"ok": False, "error": self.live_error, "live_ready": False}
+                self._try_load_kalshi_creds()
+                if not self.kalshi_api.ready:
+                    return {"ok": False, "error": self.live_error, "live_ready": False}
             if not (self.cfg.dashboard_token or "").strip():
                 self.live_error = (
                     "Set SCALPER_DASHBOARD_TOKEN before LIVE so :8787 cannot be armed by anyone who can reach it."
@@ -739,6 +756,8 @@ class Engine:
         }
 
     def state(self) -> dict:
+        if self._kalshi_from_env and not self.kalshi_api.ready:
+            self._try_load_kalshi_creds()
         now = time.time()
         with self._lock:
             cards = []

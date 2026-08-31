@@ -1,0 +1,27 @@
+[Unit]
+Description=KALSHI15 campaign desk (KalshiBot, not the IOC scalper)
+Documentation=file:///home/mkubit/KalshiBot-Scalper/README.md
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=/home/mkubit/KalshiBot-Scalper
+ExecStart=/usr/bin/python3 /home/mkubit/KalshiBot-Scalper/run_kalshi15.py
+EnvironmentFile=-/home/mkubit/KalshiBot-Scalper/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=KALSHI15_HOST=0.0.0.0
+Environment=KALSHI15_PORT=8000
+# Do not auto-arm campaign live. Set KALSHI_LIVE only when you mean it.
+Environment=KALSHI_LIVE=
+Restart=always
+RestartSec=1
+KillMode=mixed
+TimeoutStopSec=20
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kalshi15
+
+[Install]
+WantedBy=default.target

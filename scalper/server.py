@@ -5,11 +5,14 @@ from __future__ import annotations
 import hmac
 import json
 import threading
+import errno
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .engine import Engine
+from .kalshi15 import board as kalshi15_board
+from .kalshi15 import start_desk as kalshi15_start
 
 WEB = Path(__file__).resolve().parent.parent / "web"
 
@@ -58,7 +61,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def _dispatch(self, *, write_body: bool) -> None:
         path = self.path.split("?", 1)[0]
-        if path in {"/", "/index.html"}:
+        if path in {"/", "/desk", "/desk/"}:
+            self._file(WEB / "home.html", "text/html; charset=utf-8", write_body=write_body)
+            return
+        if path in {"/scalper", "/scalper/", "/index.html"}:
             self._file(WEB / "index.html", "text/html; charset=utf-8", write_body=write_body)
             return
         if path in {"/roughs", "/roughs/"}:
@@ -76,6 +82,19 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/health":
             self._json(200, {"ok": True}, write_body=write_body)
+            return
+        if path in {"/bot", "/bot/", "/kalshi15", "/kalshi15/", "/k15", "/k15/"}:
+            self._file(WEB / "kalshi15.html", "text/html; charset=utf-8", write_body=write_body)
+            return
+        if path in {"/api/campaign", "/api/kalshi15"}:
+            if not self._token_ok():
+                self._json(
+                    401,
+                    {"ok": False, "error": "dashboard token required", "dashboard_locked": True},
+                    write_body=write_body,
+                )
+                return
+            self._json(200, kalshi15_board(), write_body=write_body)
             return
         # Static assets under web/ (dash.js, roughs/*.html). Never escape WEB.
         if path.startswith("/web/"):
@@ -106,11 +125,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
         self.send_error(404)
 
-    def do_POST(self) -> None:  # noqa: N802
-        path = self.path.split("?", 1)[0]
-        if path != "/api/action":
-            self.send_error(404)
-            return
+    def _read_payload(self) -> dict | None:
         raw = self.rfile.read(int(self.headers.get("Content-Length") or 0) or 0)
         try:
             payload = json.loads(raw.decode() or "{}")
@@ -118,6 +133,29 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("payload must be an object")
         except (ValueError, UnicodeDecodeError) as e:
             self._json(400, {"ok": False, "error": str(e)})
+            return None
+        return payload
+
+    def do_POST(self) -> None:  # noqa: N802
+        path = self.path.split("?", 1)[0]
+        if path in {"/api/kalshi15", "/api/campaign"}:
+            payload = self._read_payload()
+            if payload is None:
+                return
+            if not self._token_ok(payload):
+                self._json(401, {"ok": False, "error": "dashboard token required", "dashboard_locked": True})
+                return
+            op = str(payload.get("op") or "start").strip().lower()
+            if op != "start":
+                self._json(400, {"ok": False, "error": "op must be start"})
+                return
+            self._json(200, kalshi15_start())
+            return
+        if path != "/api/action":
+            self.send_error(404)
+            return
+        payload = self._read_payload()
+        if payload is None:
             return
         if not self._token_ok(payload):
             self._json(401, {"ok": False, "error": "dashboard token required", "dashboard_locked": True})
@@ -142,6 +180,8 @@ class Handler(BaseHTTPRequestHandler):
         data = p.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", ctype)
+        if "html" in ctype or "javascript" in ctype or "css" in ctype:
+            self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(data) if write_body else 0))
         self.send_header("Connection", "close")
         self.end_headers()
@@ -151,7 +191,16 @@ class Handler(BaseHTTPRequestHandler):
 
 def serve(engine: Engine, host: str, port: int) -> ThreadingHTTPServer:
     Handler.engine = engine
-    httpd = ThreadingHTTPServer((host, port), Handler)
+    try:
+        httpd = ThreadingHTTPServer((host, port), Handler)
+    except OSError as e:
+        if e.errno == errno.EADDRINUSE:
+            raise SystemExit(
+                f"Port {port} is already in use. The phone is talking to that process.\n"
+                "Do not start a second python3 run.py.\n"
+                "Restart the one that is up:  systemctl --user restart kalshi-btc-scalper"
+            ) from e
+        raise
     t = threading.Thread(target=httpd.serve_forever, name="http", daemon=True)
     t.start()
     return httpd

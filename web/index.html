@@ -8,7 +8,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Scalper" />
-  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="manifest" href="/manifest-scalper.webmanifest" />
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
@@ -74,6 +74,7 @@
     .pill.live { color: var(--yes); background: rgba(34,197,94,.1); }
     .pill.warn { color: var(--amber); background: rgba(234,179,8,.1); }
     .pill.real { color: var(--no); background: rgba(239,68,68,.12); }
+    a.pill { text-decoration: none; color: var(--yes); }
     .stats { display: flex; flex-wrap: wrap; gap: 16px; margin-left: auto; font-size: 12px; color: var(--dim); align-items: center; }
     .stats b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
     .up { color: var(--yes); } .dn { color: var(--no); } .flat { color: var(--dim); }
@@ -178,6 +179,28 @@
       border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px;
     }
     .rough-tag a { color: var(--yes); text-decoration: none; }
+    .reach-help {
+      position: fixed; left: 12px; right: 12px; top: calc(12px + env(safe-area-inset-top, 0px));
+      z-index: 9; background: #2a1c10; border: 1px solid rgba(234,179,8,.35);
+      color: var(--text); border-radius: 14px; padding: 12px 14px; font-size: 13px; line-height: 1.45;
+      box-shadow: 0 16px 40px rgba(0,0,0,.45);
+    }
+    .reach-help[hidden] { display: none !important; }
+    .unlock-back {
+      position: fixed; inset: 0; z-index: 25; background: rgba(0,0,0,.82);
+      display: grid; place-items: center; padding: 20px;
+    }
+    .unlock-back[hidden] { display: none !important; }
+    .unlock {
+      width: min(420px, 100%); background: var(--panel); border: 1px solid var(--line);
+      border-radius: 20px; padding: 22px;
+    }
+    .unlock h2 { margin: 0 0 8px; letter-spacing: .08em; font-size: 12px; color: var(--amber); }
+    .unlock p { margin: 0 0 12px; font-size: 14px; line-height: 1.45; }
+    .unlock input {
+      width: 100%; background: rgba(0,0,0,.3); color: var(--text); border: 1px solid var(--line);
+      border-radius: 12px; padding: 12px; font-family: inherit; font-size: 16px; margin-bottom: 10px;
+    }
     .install-hint {
       position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
       z-index: 8; display: flex; gap: 10px; align-items: center;
@@ -191,12 +214,25 @@
     html.standalone, html.standalone body { overscroll-behavior: none; min-height: 100dvh; }
     html.standalone .install-hint, html.standalone .rough-tag { display: none !important; }
     html.standalone header { padding-top: calc(12px + env(safe-area-inset-top, 0px)); }
+    .status-line {
+      width: 100%; font-size: 14px; line-height: 1.4; color: var(--text);
+      padding: 8px 0 0;
+    }
+    .status-line.real { color: var(--no); font-weight: 600; }
+    .chrome-pills { display: none; }
+    #dashToken { display: none !important; }
+    .more-panel { display: grid; gap: 14px; }
+    .more-panel[hidden] { display: none !important; }
+    body.board-locked main { visibility: hidden; }
+    a.desk-switch { font-size: 13px; color: var(--dim); text-decoration: none; border-bottom: 1px dashed var(--line); }
+    .status-line.warn { color: var(--amber); }
+    .stat-extra { color: var(--dim); }
 
     /* live streamlining */
     header .stats > div:nth-child(n+5) { opacity: .7; }
     .toolbar[data-chrome="filters"] { opacity: .85; }
     @media (max-width: 720px) {
-      header .stats > div:not(:has(#pnlBox)):not(:has(#eq)):not(:has(#cash)):not(:has(#open)) { display: none; }
+      header .stats .stat-extra { display: none; }
       .tune .hint, .toolbar .hint { display: none; }
       html, body { font-size: 15px; }
       header {
@@ -235,34 +271,45 @@
 <body>
   <header>
     <div class="logo">SCALPER <em>3000</em></div>
+    <a class="desk-switch" href="/">Desk</a>
     <div class="mode-toggle">
-      <button id="btnPaper" type="button">PAPER</button>
-      <button id="btnLive" type="button" class="danger">LIVE</button>
-      <input id="dashToken" type="password" autocomplete="off" spellcheck="false" placeholder="token" hidden />
+      <button id="btnPaper" type="button">Practice</button>
+      <button id="btnLive" type="button" class="danger">Real money</button>
+      <input id="dashToken" type="password" autocomplete="off" spellcheck="false" placeholder="board password" hidden />
     </div>
-    <div class="pill" id="lock">OPEN</div>
-    <div class="pill" id="mode">PAPER</div>
-    <div class="pill" id="feed">FEED …</div>
-    <div class="pill" id="armed">ARMED</div>
+    <div class="chrome-pills">
+      <div class="pill" id="lock">OPEN</div>
+      <div class="pill" id="mode">PAPER</div>
+      <div class="pill" id="feed">FEED …</div>
+      <div class="pill" id="armed">ARMED</div>
+    </div>
     <div class="pill" id="loosePill" hidden>LOOSE</div>
-    <button id="btnPause" type="button">PAUSE</button>
+    <button id="btnPause" type="button">Pause</button>
+    <div class="status-line" id="statusLine">Unlock the board to see live prices.</div>
     <div class="stats">
-      <div>EQ <b id="eq">—</b></div>
-      <div>CASH <b id="cash">—</b></div>
+      <div class="stat-extra">EQ <b id="eq">—</b></div>
+      <div class="stat-extra">CASH <b id="cash">—</b></div>
       <div id="pnlBox" class="flat" title="session realized PnL">
         <span class="dir" id="pnlDir">FLAT</span>
         <b id="pnl">$0.00</b>
       </div>
-      <div>FEES <b id="fees">—</b></div>
-      <div>OPEN <b id="open">0</b></div>
-      <div>W/L <b id="wl">0/0</b></div>
-      <div>UP <b id="up">0:00</b></div>
-      <div>T <b id="tick">0</b></div>
+      <div class="stat-extra">FEES <b id="fees">—</b></div>
+      <div>Open <b id="open">0</b></div>
+      <div class="stat-extra">W/L <b id="wl">0/0</b></div>
+      <div class="stat-extra">UP <b id="up">0:00</b></div>
+      <div class="stat-extra">T <b id="tick">0</b></div>
     </div>
   </header>
   <main>
+    <section class="grid" id="cards"></section>
+    <section class="detail" id="detail" hidden></section>
+    <div class="toolbar">
+      <button type="button" id="btnMore">More</button>
+      <a class="desk-switch" href="/">← Desk</a>
+    </div>
+    <div class="more-panel" id="morePanel" hidden>
     <section class="markets">
-      <h2>MKTS</h2>
+      <h2>MARKETS</h2>
       <div class="mrail" id="markets"></div>
       <div class="toolbar">
         <button type="button" id="btnAllOn">ALL ON</button>
@@ -270,15 +317,15 @@
       </div>
     </section>
     <section class="tune" id="tuneBar">
-      <span class="sub">ENTRY</span>
+      <span class="sub">How picky</span>
       <div class="meter">
-        <span class="lab">σ</span>
+        <span class="lab">move</span>
         <button type="button" data-tune="sigma" data-dir="-1">−</button>
         <span class="val" id="tuneSigma">0.55</span>
         <button type="button" data-tune="sigma" data-dir="1">+</button>
       </div>
       <div class="meter">
-        <span class="lab">EDGE</span>
+        <span class="lab">edge</span>
         <button type="button" data-tune="edge" data-dir="-1">−</button>
         <span class="val" id="tuneEdge">0.040</span>
         <button type="button" data-tune="edge" data-dir="1">+</button>
@@ -299,8 +346,6 @@
       <button type="button" data-sort="spread">SPREAD</button>
       <div class="hint">1–7 · P pause · F flatten</div>
     </section>
-    <section class="grid" id="cards"></section>
-    <section class="detail" id="detail" hidden></section>
     <section class="bottom">
       <div class="card">
         <div class="row">
@@ -316,6 +361,9 @@
         </div>
         <div class="log-body" id="logBody"><div class="log" id="log"></div></div>
       </div>
+    </section>
+    </div>
+    <section class="bottom">
       <div class="card">
         <h2>FILLS</h2>
         <div class="fills-wrap" style="overflow:auto">
@@ -338,6 +386,16 @@
       </div>
     </section>
   </main>
+  <div class="unlock-back" id="unlockGate" hidden>
+    <div class="unlock">
+      <h2>BOARD PASSWORD</h2>
+      <p id="unlockMsg">Type SCALPER_DASHBOARD_TOKEN from the Pi .env. Not the Kalshi Key ID (the 36-character UUID).</p>
+      <input id="unlockToken" type="password" autocomplete="off" spellcheck="false" placeholder="board password" />
+      <div class="acts">
+        <button type="button" class="yes" id="btnUnlock">UNLOCK</button>
+      </div>
+    </div>
+  </div>
   <div class="modal-back" id="modeModal" hidden>
     <div class="modal">
       <h2>REAL MONEY</h2>
@@ -350,6 +408,7 @@
       </div>
     </div>
   </div>
+  <div class="reach-help" id="reachHelp" hidden></div>
   <div class="install-hint" id="installHint" hidden>
     <div>
       <strong>Add to Home Screen</strong>
@@ -358,6 +417,6 @@
     <button type="button" id="btnInstallDismiss">GOT IT</button>
   </div>
   <div class="rough-tag"><a href="/roughs/">design roughs</a></div>
-  <script src="/dash.js"></script>
+  <script src="/dash.js?v=desk1"></script>
 </body>
 </html>

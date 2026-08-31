@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0c0f0d" />
+  <title>KalshiBot desk</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0c0f0d; color: #f2f5f2; font-family: ui-sans-serif, system-ui, sans-serif; }
+    header { padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid rgba(255,255,255,.08); }
+    a { color: #22c55e; text-decoration: none; }
+    .warn { padding: 12px 14px; color: #eab308; font-size: 13px; line-height: 1.4; }
+    iframe { border: 0; width: 100%; height: calc(100% - 88px); background: #0c0f0d; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/">← Scalper</a>
+    <strong>KalshiBot</strong>
+  </header>
+  <p class="warn">Research desk + campaign (15m post-only / hourly / maker). Do not run its 15m LIVE on BTC while the scalper is LIVE — they fight the same book.</p>
+  <iframe id="desk" title="KalshiBot desk"></iframe>
+  <script>
+    const host = location.hostname || "127.0.0.1";
+    const proto = location.protocol === "https:" ? "https:" : "http:";
+    document.getElementById("desk").src = proto + "//" + host + ":8000/";
+  </script>
+</body>
+</html>

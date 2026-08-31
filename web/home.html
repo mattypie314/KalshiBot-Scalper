@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0c0f0d" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Desk" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <title>Desk — pick one</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c0f0d; --text: #f2f5f2; --dim: #8b968c; --yes: #22c55e;
+      --amber: #eab308; --line: rgba(255,255,255,.08);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; min-height: 100%;
+      background:
+        radial-gradient(900px 500px at 10% -10%, #1a2a1c 0%, transparent 55%),
+        var(--bg);
+      color: var(--text);
+      font-family: "Outfit", ui-sans-serif, sans-serif;
+    }
+    main {
+      max-width: 480px; margin: 0 auto;
+      padding: calc(28px + env(safe-area-inset-top, 0px)) 18px calc(28px + env(safe-area-inset-bottom, 0px));
+    }
+    .kicker { font-size: 12px; letter-spacing: .16em; color: var(--dim); font-weight: 600; }
+    h1 { font-size: 28px; margin: 8px 0 10px; letter-spacing: -.02em; }
+    .lead { color: var(--dim); font-size: 15px; line-height: 1.45; margin: 0 0 22px; }
+    .pick {
+      display: block; text-decoration: none; color: inherit;
+      background: #161b17; border: 1px solid var(--line); border-radius: 20px;
+      padding: 20px 18px; margin: 0 0 12px; min-height: 120px;
+    }
+    .pick:active { transform: scale(.99); }
+    .pick.scalper { border-color: rgba(34,197,94,.35); }
+    .pick.k15 { border-color: rgba(234,179,8,.4); }
+    .pick.last { box-shadow: 0 0 0 1px rgba(255,255,255,.12); }
+    .pick .name { font-size: 22px; font-weight: 700; letter-spacing: .04em; }
+    .pick.scalper .name { color: var(--yes); }
+    .pick.k15 .name { color: var(--amber); }
+    .pick p { margin: 8px 0 0; color: var(--dim); font-size: 14px; line-height: 1.4; }
+    .pick .go { margin-top: 14px; font-size: 13px; font-weight: 600; color: var(--text); }
+    .warn { font-size: 13px; color: var(--amber); line-height: 1.4; margin-top: 16px; }
+    .reach-help, .install-hint {
+      position: fixed; left: 12px; right: 12px; z-index: 8;
+      border-radius: 14px; padding: 12px 14px; font-size: 13px; line-height: 1.45;
+    }
+    .reach-help {
+      top: calc(12px + env(safe-area-inset-top, 0px));
+      background: #2a1c10; border: 1px solid rgba(234,179,8,.35);
+    }
+    .reach-help[hidden], .install-hint[hidden] { display: none !important; }
+    .install-hint {
+      bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+      display: flex; gap: 10px; align-items: center;
+      background: #1a211c; border: 1px solid var(--line);
+    }
+    .install-hint strong { display: block; margin-bottom: 4px; }
+    .install-hint p { margin: 0; color: var(--dim); font-size: 12px; }
+    .install-hint button {
+      flex-shrink: 0; min-height: 40px; border-radius: 999px;
+      border: 1px solid var(--line); background: transparent; color: var(--text);
+      font-family: inherit; padding: 8px 12px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="kicker">TWO BOTS</div>
+    <h1>Pick one.</h1>
+    <p class="lead">These are different machines. Open only the one you mean to run.</p>
+    <a class="pick scalper" id="pickScalper" href="/scalper">
+      <div class="name">SCALPER</div>
+      <p>15-minute lag scalp. Watches Coinbase / Kraken vs the Kalshi Yes book. IOC limits. Practice or real money.</p>
+      <div class="go">Open SCALPER →</div>
+    </a>
+    <a class="pick k15" id="pickK15" href="/kalshi15">
+      <div class="name">KALSHI15</div>
+      <p>The other bot. Campaign desk: post-only 15m, hourly, last-3-minute maker, sports. Not the scalp.</p>
+      <div class="go">Open KALSHI15 →</div>
+    </a>
+    <p class="warn">Do not run both on real money against the same BTC 15-minute book. They fight each other.</p>
+  </main>
+  <div class="reach-help" id="reachHelp" hidden></div>
+  <div class="install-hint" id="installHint" hidden>
+    <div>
+      <strong>Add to Home Screen</strong>
+      <p id="installHintText">Safari: Share → Add to Home Screen. Then pick SCALPER or KALSHI15 from the icon.</p>
+    </div>
+    <button type="button" id="btnInstallDismiss">GOT IT</button>
+  </div>
+  <script>
+    const LAST = "scalper_desk_choice";
+    try {
+      const last = localStorage.getItem(LAST);
+      if (last === "scalper") document.getElementById("pickScalper").classList.add("last");
+      if (last === "kalshi15") document.getElementById("pickK15").classList.add("last");
+    } catch (_) {}
+    document.getElementById("pickScalper").addEventListener("click", () => {
+      try { localStorage.setItem(LAST, "scalper"); } catch (_) {}
+    });
+    document.getElementById("pickK15").addEventListener("click", () => {
+      try { localStorage.setItem(LAST, "kalshi15"); } catch (_) {}
+    });
+    const A2HS = "scalper_a2hs_dismissed";
+    function standalone() {
+      try { if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) return true; } catch (_) {}
+      return window.navigator.standalone === true;
+    }
+    const hint = document.getElementById("installHint");
+    const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || "");
+    let dismissed = false;
+    try { dismissed = localStorage.getItem(A2HS) === "1"; } catch (_) {}
+    hint.hidden = standalone() || dismissed || !mobile;
+    document.getElementById("btnInstallDismiss").addEventListener("click", () => {
+      try { localStorage.setItem(A2HS, "1"); } catch (_) {}
+      hint.hidden = true;
+    });
+    const h = (location.hostname || "").toLowerCase();
+    const reach = document.getElementById("reachHelp");
+    if (h === "127.0.0.1" || h === "localhost") {
+      reach.hidden = false;
+      reach.textContent = "This tab is this computer only. On the iPhone use http:// then the Pi's 192.168.…:8787";
+    }
+  </script>
+</body>
+</html>

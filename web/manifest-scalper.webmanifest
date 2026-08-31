@@ -1,7 +1,7 @@
 {
-  "name": "Desk",
-  "short_name": "Desk",
-  "start_url": "/",
+  "name": "Scalper",
+  "short_name": "Scalper",
+  "start_url": "/scalper",
   "scope": "/",
   "display": "standalone",
   "background_color": "#0c0f0d",

@@ -368,6 +368,11 @@ def test_action_http_roundtrip():
         health = urllib.request.Request(f"http://127.0.0.1:{port}/health", method="HEAD")
         with urllib.request.urlopen(health, timeout=3) as resp:
             assert resp.status == 200
+        try:
+            serve(eng, "127.0.0.1", port)
+            raise AssertionError("expected port-in-use SystemExit")
+        except SystemExit as e:
+            assert "already in use" in str(e)
     finally:
         httpd.shutdown()
         httpd.server_close()
@@ -411,10 +416,22 @@ class _FakeKalshi:
         return LiveFill(ok=True, qty=fill, price=yes_price, fee=0.02, order_id="ord1")
 
 
-def test_live_toggle_requires_confirm_and_keys():
+def test_live_toggle_requires_confirm_and_keys(monkeypatch):
     from scalper.engine import Engine
+    from scalper.kalshi_api import KalshiClient
 
-    eng = Engine(ScalperConfig())
+    for k in (
+        "KALSHI_API_KEY",
+        "KALSHI_API_KEY_ID",
+        "KALSHI_ACCESS_KEY",
+        "KALSHI_KEY_ID",
+        "KALSHI_PRIVATE_KEY",
+        "KALSHI_PRIVATE_KEY_PATH",
+    ):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setattr("scalper.engine.load_dotenv", lambda *a, **k: None)
+    monkeypatch.setattr("scalper.kalshi_api._default_pem_paths", lambda: [])
+    eng = Engine(ScalperConfig(), kalshi_api=KalshiClient(None))
     snap = eng.state()
     assert snap["mode"] == "PAPER"
     assert snap["live_ready"] is False
@@ -423,8 +440,93 @@ def test_live_toggle_requires_confirm_and_keys():
     assert no_confirm.get("need_confirm") is True
     blocked = eng.action({"op": "mode", "mode": "LIVE", "confirm": "LIVE"})
     assert blocked["ok"] is False
-    assert "keys" in blocked["error"].lower()
+    assert "key" in blocked["error"].lower()
+    assert "BEGIN" not in blocked["error"]
     assert eng.mode == "PAPER"
+
+
+def test_creds_status_explains_missing_pem_path(tmp_path, monkeypatch):
+    from scalper.kalshi_api import creds_status, load_creds
+
+    monkeypatch.delenv("KALSHI_API_KEY", raising=False)
+    monkeypatch.delenv("KALSHI_API_KEY_ID", raising=False)
+    monkeypatch.delenv("KALSHI_ACCESS_KEY", raising=False)
+    monkeypatch.delenv("KALSHI_KEY_ID", raising=False)
+    monkeypatch.delenv("KALSHI_PRIVATE_KEY", raising=False)
+    monkeypatch.delenv("KALSHI_PRIVATE_KEY_PATH", raising=False)
+    creds, err = creds_status()
+    assert creds is None
+    assert load_creds() is None
+    assert "KALSHI_API_KEY" in err
+    assert "BEGIN" not in err
+
+    monkeypatch.setenv("KALSHI_API_KEY", "kid-1")
+    missing = tmp_path / "nope.pem"
+    monkeypatch.setenv("KALSHI_PRIVATE_KEY_PATH", str(missing))
+    creds, err = creds_status()
+    assert creds is None
+    assert "not found" in err.lower()
+    assert "kid-1" not in err
+
+    pem = tmp_path / "ok.pem"
+    pem.write_text("-----BEGIN RSA PRIVATE KEY-----\nMIIB\n-----END RSA PRIVATE KEY-----\n")
+    monkeypatch.setenv("KALSHI_PRIVATE_KEY_PATH", str(pem))
+    creds, err = creds_status()
+    assert creds is not None
+    assert creds.key_id == "kid-1"
+    assert err == ""
+
+    monkeypatch.delenv("KALSHI_PRIVATE_KEY_PATH", raising=False)
+    monkeypatch.setattr("scalper.kalshi_api._default_pem_paths", lambda: [pem])
+    creds, err = creds_status()
+    assert creds is not None
+    assert err == ""
+
+
+def test_live_reloads_creds_from_dotenv(tmp_path, monkeypatch):
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from scalper.engine import Engine
+    from scalper.envfile import load_dotenv as real_load
+    from scalper.kalshi_api import KalshiClient
+
+    for k in (
+        "KALSHI_API_KEY",
+        "KALSHI_API_KEY_ID",
+        "KALSHI_ACCESS_KEY",
+        "KALSHI_KEY_ID",
+        "KALSHI_PRIVATE_KEY",
+        "KALSHI_PRIVATE_KEY_PATH",
+    ):
+        monkeypatch.delenv(k, raising=False)
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem_text = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode()
+    pem = tmp_path / "ok.pem"
+    pem.write_text(pem_text)
+    env = tmp_path / ".env"
+    env.write_text(f"KALSHI_API_KEY=kid-reload\nKALSHI_PRIVATE_KEY_PATH={pem}\n")
+    monkeypatch.setattr("scalper.engine.load_dotenv", lambda *a, **k: real_load(env))
+
+    def transport(method, url, headers, body):
+        if "balance" in url:
+            return 200, {"balance_dollars": "12.50"}
+        if "positions" in url:
+            return 200, {"market_positions": []}
+        return 200, {}
+
+    cfg = ScalperConfig()
+    cfg.dashboard_token = "lock"
+    eng = Engine(cfg, kalshi_api=KalshiClient(None, transport=transport))
+    assert eng.state()["live_ready"] is False
+    out = eng.action({"op": "mode", "mode": "LIVE", "confirm": "LIVE"})
+    assert out["ok"] is True
+    assert eng.mode == "LIVE"
+    assert eng.kalshi_api.ready is True
 
 
 def test_live_toggle_with_client_and_orders():
@@ -722,26 +824,61 @@ def test_static_roughs_and_dash_js():
                 body = resp.read()
                 assert len(body) > 100
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as resp:
+            home = resp.read().decode()
+            assert "KALSHI15" in home
+            assert "/scalper" in home
+            assert "/kalshi15" in home
+            assert "Outfit" in home or "SCALPER" in home
+            assert "viewport-fit=cover" in home
+            assert "apple-mobile-web-app-capable" in home
+            assert "/manifest.webmanifest" in home
+            assert "apple-touch-icon.png" in home
+            assert 'id="installHint"' in home
+            assert 'id="reachHelp"' in home
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/scalper", timeout=3) as resp:
             html = resp.read().decode()
             assert "dash.js" in html
-            assert "Outfit" in html or "SCALPER" in html
+            assert "SCALPER" in html
             assert "viewport-fit=cover" in html
             assert "apple-mobile-web-app-capable" in html
-            assert "/manifest.webmanifest" in html
+            assert "/manifest-scalper.webmanifest" in html
             assert "apple-touch-icon.png" in html
             assert 'id="installHint"' in html
+            assert 'id="reachHelp"' in html
+            assert 'id="unlockGate"' in html
+            assert 'id="statusLine"' in html
+            assert 'id="btnMore"' in html
+            assert "campaignCard" not in html
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/dash.js", timeout=3) as resp:
             js = resp.read().decode()
             assert "localStorage" in js
             assert "captureUrlToken" in js
             assert "showInstallHint" in js
             assert "isStandalone" in js
+            assert "showReachHelp" in js
+            assert "Dashboard is locked" in js
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/manifest.webmanifest", timeout=3) as resp:
             assert resp.status == 200
             assert "manifest" in (resp.headers.get("Content-Type") or "")
             man = resp.read().decode()
             assert "standalone" in man
             assert "icon-192.png" in man
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/kalshi15", timeout=3) as resp:
+            k15 = resp.read().decode()
+            assert "KALSHI15" in k15
+            assert 'id="campaignCard"' in k15
+            assert "k15.js" in k15
+            assert "8000" in k15
+            assert 'id="btnStart"' in k15
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/bot", timeout=3) as resp:
+            bot = resp.read().decode()
+            assert "KALSHI15" in bot
+            assert "8000" in bot
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/k15.js", timeout=3) as resp:
+            kjs = resp.read().decode()
+            assert "TOKEN_KEY" in kjs
+            assert ":8000" in kjs
+            assert "startDesk" in kjs
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/icon.svg", timeout=3) as resp:
             assert resp.status == 200
             assert b"<svg" in resp.read()
@@ -815,7 +952,7 @@ def test_action_http_requires_token():
 
 
 def test_dashboard_urls_loopback_when_bound_local():
-    from scalper.netinfo import dashboard_urls, lan_ipv4s
+    from scalper.netinfo import dashboard_urls, is_home_wifi_ip, lan_ipv4s, startup_lines
 
     assert dashboard_urls(8787, "127.0.0.1") == ["http://127.0.0.1:8787"]
     wide = dashboard_urls(8787, "0.0.0.0")
@@ -825,6 +962,131 @@ def test_dashboard_urls_loopback_when_bound_local():
         assert f"http://{extra[0]}:8787" in wide
     else:
         assert wide == ["http://127.0.0.1:8787"]
+    assert is_home_wifi_ip("192.168.1.42") is True
+    assert is_home_wifi_ip("10.0.0.5") is True
+    assert is_home_wifi_ip("100.64.1.2") is True
+    assert is_home_wifi_ip("172.30.0.2") is False
+    assert is_home_wifi_ip("127.0.0.1") is False
+    bound = startup_lines(8787, "127.0.0.1")
+    assert bound[0] == "Scalper 3000 dashboard  http://127.0.0.1:8787"
+    assert any("Phone cannot open" in line for line in bound)
+    assert not any(line.startswith("Phone (same Wi-Fi)") for line in bound)
+
+
+def test_campaign_snapshot_reads_tracker(tmp_path, monkeypatch):
+    from scalper.campaign_status import snapshot, tracker_path
+
+    missing = tmp_path / "nope.json"
+    monkeypatch.setenv("TRACKER_PATH", str(missing))
+    empty = snapshot()
+    assert empty["present"] is False
+    assert empty["ok"] is False
+    book = tmp_path / "crypto-campaign.json"
+    book.write_text(
+        '{"bankroll": 40, "realized": 1.25, "tickets": [{"status": "open", "ticker": "X"}],'
+        ' "rests": [], "log": ["hello"], "sizing": {"halted": true, "maker_auto": false}}'
+    )
+    monkeypatch.setenv("TRACKER_PATH", str(book))
+    assert tracker_path() == book
+    snap = snapshot()
+    assert snap["ok"] is True
+    assert snap["present"] is True
+    assert snap["bankroll"] == 40
+    assert snap["halted"] is True
+    assert snap["maker_auto"] is False
+    assert len(snap["open_tickets"]) == 1
+    assert "fight" in snap["warn"]
+
+
+def test_kalshi15_find_root_and_board(tmp_path, monkeypatch):
+    from scalper.kalshi15 import board, desk_up, find_root, looks_like_kalshibot
+
+    missing = tmp_path / "nope"
+    monkeypatch.setenv("KALSHI15_ROOT", str(missing))
+    monkeypatch.delenv("KALSHIBOT_ROOT", raising=False)
+    assert find_root() is None
+    assert looks_like_kalshibot(missing) is False
+    root = tmp_path / "KalshiBot"
+    (root / "kalshibot").mkdir(parents=True)
+    (root / "kalshibot" / "__init__.py").write_text("")
+    monkeypatch.setenv("KALSHI15_ROOT", str(root))
+    assert find_root() == root.resolve()
+    assert desk_up(port=1) is False
+    monkeypatch.setenv("TRACKER_PATH", str(tmp_path / "missing-book.json"))
+    snap = board()
+    assert snap["name"] == "KALSHI15"
+    assert snap["desk_up"] is False
+    assert snap["present"] is False
+
+
+def test_kalshi15_start_missing_root_and_already_up(tmp_path, monkeypatch):
+    import socket
+
+    from pathlib import Path
+
+    from scalper.kalshi15 import _fail_hint, start_desk
+
+    hint = _fail_hint("ModuleNotFoundError: No module named 'uvicorn'", Path("/tmp/KalshiBot"))
+    assert "pip install" in hint
+
+    monkeypatch.setenv("KALSHI15_ROOT", str(tmp_path / "nope"))
+    missing = start_desk(wait=0.2)
+    assert missing["ok"] is False
+    assert missing["started"] is False
+    assert "KalshiBot" in missing["error"]
+
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.listen(1)
+    monkeypatch.setenv("KALSHI15_PORT", str(port))
+    try:
+        already = start_desk(wait=0.2)
+        assert already["ok"] is True
+        assert already["started"] is False
+        assert already["desk_up"] is True
+    finally:
+        sock.close()
+
+
+def test_kalshi15_start_http_requires_token_and_reports_missing_root(tmp_path, monkeypatch):
+    import json
+    import urllib.error
+    import urllib.request
+
+    from scalper.engine import Engine
+    from scalper.server import serve
+
+    monkeypatch.setenv("KALSHI15_ROOT", str(tmp_path / "nope"))
+    cfg = ScalperConfig()
+    cfg.dashboard_token = "lock"
+    httpd = serve(Engine(cfg), "127.0.0.1", 0)
+    port = httpd.server_address[1]
+    try:
+        bare = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/kalshi15",
+            data=json.dumps({"op": "start"}).encode(),
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            urllib.request.urlopen(bare, timeout=3)
+            raise AssertionError("expected 401")
+        except urllib.error.HTTPError as e:
+            assert e.code == 401
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/kalshi15",
+            data=json.dumps({"op": "start"}).encode(),
+            method="POST",
+            headers={"Content-Type": "application/json", "X-Scalper-Token": "lock"},
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            body = json.loads(resp.read().decode())
+        assert body["ok"] is False
+        assert "KalshiBot" in body["error"]
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
 
 
 def test_parse_asset_allowlist():
@@ -872,6 +1134,11 @@ def test_load_dotenv_does_not_override_env(tmp_path, monkeypatch):
     assert load_dotenv(p) == p
     assert os.environ["SCALPER_DOTENV_TEST"] == "from-file"
     assert os.environ["SCALPER_DOTENV_KEEP"] == "from-env"
+    monkeypatch.setenv("SCALPER_DOTENV_EMPTY", "")
+    p.write_text("SCALPER_DOTENV_EMPTY=from-file\nexport SCALPER_DOTENV_EXPORT=ok\n")
+    assert load_dotenv(p) == p
+    assert os.environ["SCALPER_DOTENV_EMPTY"] == "from-file"
+    assert os.environ["SCALPER_DOTENV_EXPORT"] == "ok"
     assert load_dotenv(tmp_path / "missing.env") is None
 
 

@@ -15,7 +15,7 @@ load_dotenv(ROOT / ".env")
 
 from scalper.config import load_config  # noqa: E402
 from scalper.engine import Engine  # noqa: E402
-from scalper.netinfo import dashboard_urls  # noqa: E402
+from scalper.netinfo import startup_lines  # noqa: E402
 from scalper.server import serve  # noqa: E402
 
 
@@ -23,15 +23,15 @@ def main() -> None:
     cfg = load_config()
     engine = Engine(cfg)
     serve(engine, cfg.host, cfg.port)
-    urls = dashboard_urls(cfg.port, cfg.host)
-    print(f"Scalper 3000 dashboard  {urls[0]}", flush=True)
-    if len(urls) > 1:
-        print(f"Phone (same Wi-Fi)      {urls[1]}", flush=True)
-        for extra in urls[2:]:
-            print(f"  also                  {extra}", flush=True)
-    print("On a phone: open that URL, enter SCALPER_DASHBOARD_TOKEN, Add to Home Screen.", flush=True)
+    for line in startup_lines(cfg.port, cfg.host):
+        print(line, flush=True)
     print(f"Markets: {', '.join(cfg.assets)}", flush=True)
+    if engine.kalshi_api.ready:
+        print("Kalshi LIVE keys     ready", flush=True)
+    else:
+        print(f"Kalshi LIVE keys     {engine.live_error}", flush=True)
     print("PAPER mode. Limits only. 3–5% size. Out at +4–8¢ or when the edge dies.", flush=True)
+    print("Desk picker: SCALPER or KALSHI15. This process is SCALPER.", flush=True)
     try:
         engine.loop()
     except KeyboardInterrupt:
