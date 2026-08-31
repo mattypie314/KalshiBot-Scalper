@@ -833,6 +833,7 @@ def test_static_roughs_and_dash_js():
             assert "apple-touch-icon.png" in html
             assert 'id="installHint"' in html
             assert 'id="reachHelp"' in html
+            assert 'id="unlockGate"' in html
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/dash.js", timeout=3) as resp:
             js = resp.read().decode()
             assert "localStorage" in js

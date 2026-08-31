@@ -87,7 +87,8 @@ const $ = (id) => document.getElementById(id);
     function dashToken() {
       const header = ($("dashToken") && $("dashToken").value) || "";
       const modal = ($("modeToken") && $("modeToken").value) || "";
-      return (header || modal || readStoredToken()).trim();
+      const gate = ($("unlockToken") && $("unlockToken").value) || "";
+      return (header || modal || gate || readStoredToken()).trim();
     }
     function saveToken(value) {
       const t = (value || "").trim();
@@ -377,14 +378,19 @@ const $ = (id) => document.getElementById(id);
         const s = await r.json();
         if (r.status === 401) {
           ui.authed = false;
-          $("feed").textContent = "TOKEN";
+          $("feed").textContent = dashToken() ? "BAD TOKEN" : "TOKEN";
           $("lock").textContent = "LOCKED";
           $("lock").className = "pill warn";
           $("dashToken").hidden = false;
+          if ($("unlockGate")) $("unlockGate").hidden = false;
+          if ($("unlockMsg") && dashToken()) {
+            $("unlockMsg").textContent = "Wrong token. That is not the Kalshi Key ID. Use SCALPER_DASHBOARD_TOKEN from the Pi .env.";
+          }
           showReachHelp(null);
           return {ok: false, auth: false};
         }
         ui.authed = true;
+        if ($("unlockGate")) $("unlockGate").hidden = true;
         showReachHelp(null);
         render(s);
         return {ok: true, auth: true};
@@ -545,6 +551,18 @@ const $ = (id) => document.getElementById(id);
       }
       el.hidden = true;
     }
+    function submitUnlock() {
+      const t = (($("unlockToken") && $("unlockToken").value) || "").trim();
+      if (t) {
+        saveToken(t);
+        if ($("dashToken")) $("dashToken").value = t;
+      }
+      tick();
+    }
+    if ($("btnUnlock")) $("btnUnlock").addEventListener("click", submitUnlock);
+    if ($("unlockToken")) $("unlockToken").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") submitUnlock();
+    });
     showInstallHint();
     showReachHelp(hostIsThisComputerOnly() ? "localhost" : null);
     document.addEventListener("keydown", (e) => {
